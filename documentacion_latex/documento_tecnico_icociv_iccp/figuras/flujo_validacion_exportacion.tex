@@ -1,0 +1,68 @@
+\begin{landscape}
+\begin{figure}[H]
+\centering
+\begin{adjustbox}{max width=\linewidth,max height=0.88\textheight}
+\begin{tikzpicture}[
+    node distance=0.7cm and 1.7cm,
+    paso/.style={rectangle,rounded corners=2pt,draw=black!70,fill=blue!5,align=center,
+                 text width=3.7cm,minimum height=0.9cm,inner sep=3pt,font=\scriptsize},
+    bloque/.style={rectangle,rounded corners=2pt,draw=black!75,fill=green!8,align=center,
+                   text width=3.7cm,minimum height=0.9cm,inner sep=3pt,font=\scriptsize},
+    decision/.style={diamond,aspect=2.4,draw=black!75,fill=orange!12,align=center,
+                     inner sep=1pt,font=\scriptsize},
+    negar/.style={rectangle,rounded corners=2pt,draw=red!60!black,fill=red!7,align=center,
+                  text width=3.5cm,minimum height=0.9cm,inner sep=3pt,font=\scriptsize},
+    flecha/.style={-{Latex[length=2mm]},thick}
+]
+% --- Columna 1: descendente ---
+\node[paso] (bt) {Backtesting walk-forward};
+\node[paso,below=of bt] (reestima) {Reestimación del modelo en cada origen \(r\)};
+\node[paso,below=of reestima] (proyh) {Proyección por horizonte \(h\)};
+\node[paso,below=of proyh] (errores) {Cálculo de errores \(e_{r,h}\)};
+\node[bloque,below=of errores] (metricas)
+    {Métricas por horizonte: MAE, RMSE, MAPE, sMAPE, MASE, sesgo y errores extremos};
+
+% --- Columna 2: descendente (arranca arriba, a la derecha de 'bt') ---
+% B.1, 18-08-2026 (pasada mecanica). Se retira el paso "Evaluacion del
+% intervalo del 95% y su ancho relativo" del flujo decisorio: el intervalo es
+% diagnostico interno, no publicado, y no interviene entre la comparacion
+% contra benchmarks y la seleccion del modelo. `bench` conecta ahora
+% directamente con `seleccion`.
+\node[paso,right=of bt] (bench) {Comparación contra referencias Naive y Drift};
+\node[paso,below=of bench] (seleccion) {Selección del modelo: RMSE OOS mínimo sobre muestra común};
+\node[paso,below=of seleccion] (clasifica) {Evidencia fuera de muestra por horizonte (\(W\))};
+\node[bloque,below=of clasifica] (estados)
+    {Cada horizonte conserva su propia evidencia; un hueco no invalida los posteriores};
+\node[decision,below=of estados] (admisible) {¿Horizonte solicitado\\disponible?};
+
+% --- Bifurcación de la decisión y exportación ---
+\node[paso,below left=0.9cm and 0.2cm of admisible] (generar) {Generar proyección solicitada};
+\node[negar,below right=0.9cm and 0.2cm of admisible] (negar) {Negar proyección y mostrar el motivo};
+\node[paso,below=of generar] (pdf) {Exportación PDF, DOCX y HTML};
+\node[paso,below=of pdf] (csv) {Exportación CSV reproducible};
+\node[paso,below=of csv] (fin) {Fin};
+
+% --- Conexiones ---
+\draw[flecha] (bt) -- (reestima);
+\draw[flecha] (reestima) -- (proyh);
+\draw[flecha] (proyh) -- (errores);
+\draw[flecha] (errores) -- (metricas);
+% metricas (abajo, col1) -> bench (arriba, col2): canal vertical en el hueco
+\draw[flecha] (metricas.east) -- ++(0.85,0) |- (bench.west);
+\draw[flecha] (bench) -- (seleccion);
+\draw[flecha] (seleccion) -- (clasifica);
+\draw[flecha] (clasifica) -- (estados);
+\draw[flecha] (estados) -- (admisible);
+\draw[flecha] (admisible.south west) -- node[above left,font=\scriptsize,inner sep=1pt]{Sí} (generar.north);
+\draw[flecha] (admisible.south east) -- node[above right,font=\scriptsize,inner sep=1pt]{No} (negar.north);
+\draw[flecha] (generar) -- (pdf);
+\draw[flecha] (pdf) -- (csv);
+\draw[flecha] (csv) -- (fin);
+% negar -> fin: baja por la derecha y entra a fin por su lado derecho
+\draw[flecha] (negar.south) |- (fin.east);
+\end{tikzpicture}
+\end{adjustbox}
+\caption{Flujo de validación walk-forward, selección del modelo y exportación de resultados.}
+\label{fig:flujo_validacion_exportacion}
+\end{figure}
+\end{landscape}

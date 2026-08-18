@@ -1,0 +1,424 @@
+\documentclass[12pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-noshorthands]{babel}
+\usepackage{lmodern}
+\usepackage{amsmath}
+\usepackage{geometry}
+\geometry{letterpaper, margin=2.5cm}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{adjustbox}
+\usepackage{float}
+\usepackage{xurl}
+\usepackage{natbib}
+\usepackage[dvipsnames]{xcolor}
+\usepackage[colorlinks=true, linkcolor=MidnightBlue, citecolor=MidnightBlue, urlcolor=NavyBlue]{hyperref}
+
+\title{Criterios estad\'isticos de la aplicaci\'on ICOCIV:\\
+fundamentos, implementaci\'on y validaci\'on}
+\author{Anexo t\'ecnico del trabajo de grado ICOCIV / ICCP--ICOCIV}
+\date{23 de julio de 2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Este documento explica y sustenta cada criterio estad\'istico empleado por la aplicaci\'on ICOCIV: qu\'e hace cada etapa del procedimiento, qu\'e f\'ormula aplica, qu\'e condici\'on activa o desactiva cada regla, qu\'e fuente acad\'emica o t\'ecnica la respalda, d\'onde est\'a implementada en el c\'odigo, c\'omo se valida mediante pruebas y c\'omo influye en la aprobaci\'on, advertencia o negaci\'on de una proyecci\'on. Los criterios se clasifican expl\'icitamente en cuatro tipos ---bibliogr\'aficos, est\'andares estad\'isticos, computacionales y operativos internos--- para no presentar par\'ametros internos como reglas universales. La matriz completa de criterios (Tabla~\ref{tab:matriz_criterios}) se genera autom\'aticamente desde el propio c\'odigo, de modo que documento y aplicaci\'on no pueden divergir sin que la diferencia sea visible.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+\section{Introducci\'on}
+\label{sec:introduccion}
+
+La aplicaci\'on analiza series mensuales del \'Indice de Costos de la Construcci\'on de Obras Civiles (ICOCIV) publicadas por el DANE \citep{dane_ficha_icociv,dane2021metodologia}, valida su calidad, compara modelos de pron\'ostico mediante validaci\'on temporal fuera de muestra, determina hasta qu\'e horizonte una proyecci\'on es defendible y genera resultados con trazabilidad completa. Cada una de esas decisiones se apoya en criterios concretos: umbrales, f\'ormulas, condiciones de activaci\'on y reglas de clasificaci\'on.
+
+Este documento existe porque un criterio no auditado es un riesgo metodol\'ogico: puede sonar a est\'andar externo siendo un criterio interno, o puede aplicarse en el c\'odigo de una forma distinta a la descrita en la teor\'ia. Aqu\'i cada criterio queda identificado, tipificado, sustentado y vinculado a su implementaci\'on y a la prueba autom\'atica que lo protege.
+
+\section{Alcance del an\'alisis estad\'istico}
+\label{sec:alcance}
+
+El alcance cubre el flujo completo: preparaci\'on y validaci\'on de datos, estad\'istica descriptiva, variaciones, detecci\'on de valores at\'ipicos, detecci\'on del patr\'on de cambio de a\~no, modelos candidatos, validaci\'on walk-forward, m\'etricas de error, diagn\'ostico residual, intervalos de predicci\'on, selecci\'on de modelo, clasificaci\'on de horizontes y generaci\'on de resultados. Queda fuera del alcance el m\'odulo de empalme ICCP--ICOCIV, cuyas f\'ormulas contractuales ($R_1$, $R_2$, $R$, $Z$) provienen de lineamientos institucionales y no de criterios estad\'isticos, y la producci\'on estad\'istica oficial del DANE, que la aplicaci\'on consume pero no reemplaza.
+
+Dos exclusiones metodol\'ogicas est\'an documentadas con evidencia propia: ARIMA fue retirado del alcance del proyecto, y la combinaci\'on de pron\'osticos (ensamble) fue retirada tras medirse, con separaci\'on estricta entre calibraci\'on y evaluaci\'on, que no aporta bajo el esquema de un \'unico modelo por serie (Secci\'on~\ref{sec:seleccion}).
+
+\section{Flujo completo del procedimiento}
+\label{sec:flujo}
+
+El procedimiento sigue esta secuencia, implementada en \texttt{app\_icociv/proyeccion/servicio\_proyeccion.py} como orquestador:
+
+\begin{enumerate}
+  \item Selecci\'on de la serie mediante la ruta jer\'arquica ICOCIV y construcci\'on de la serie mensual.
+  \item Normalizaci\'on temporal y validaci\'on de calidad de datos (Secci\'on~\ref{sec:preparacion}).
+  \item Estad\'istica descriptiva, variaciones y detecci\'on de at\'ipicos (Secciones~\ref{sec:descriptiva}--\ref{sec:atipicos}).
+  \item Detecci\'on del patr\'on de cambio de a\~no (Secci\'on~\ref{sec:calendario}).
+  \item Ajuste de los modelos candidatos activados progresivamente (Secci\'on~\ref{sec:modelos}).
+  \item Validaci\'on walk-forward por modelo y por horizonte (Secciones~\ref{sec:oos}--\ref{sec:wf}).
+  \item C\'alculo de m\'etricas de error y comparaci\'on contra benchmarks (Secci\'on~\ref{sec:metricas}).
+  \item Selecci\'on de un \'unico modelo por serie (Secci\'on~\ref{sec:seleccion}).
+  \item Diagn\'ostico residual del modelo seleccionado (Secci\'on~\ref{sec:residuos}).
+  \item Clasificaci\'on de cada horizonte y determinaci\'on del m\'aximo recomendado y admisible (Secci\'on~\ref{sec:horizonte}).
+  \item Proyecci\'on, ajuste calendario si procede, e intervalos de predicci\'on (Secci\'on~\ref{sec:intervalos}).
+  \item Generaci\'on de resultados, advertencias y exportables reproducibles (Secciones~\ref{sec:decision}--\ref{sec:reproducibilidad}).
+\end{enumerate}
+
+La validaci\'on fuera de muestra ocupa el centro del flujo porque el ajuste dentro de muestra no garantiza capacidad predictiva; una regresi\'on con $R^2$ alto puede ser espuria cuando las series comparten tendencia \citep{granger_newbold1974,springer_spurious_regressions}.
+
+\section{Preparaci\'on y validaci\'on de datos}
+\label{sec:preparacion}
+
+\textbf{Qu\'e hace.} \texttt{validacion\_series.py} y \texttt{analisis\_series.py} verifican frecuencia mensual, orden de periodos, continuidad temporal, duplicados, valores faltantes, valores no num\'ericos, valores no positivos y longitud. Los errores cr\'iticos (duplicados de periodo, discontinuidad, valores inv\'alidos) impiden modelar; las advertencias quedan en la trazabilidad. La aplicaci\'on \emph{no} interpola ni imputa valores: un vac\'io es un error que el usuario debe resolver en la fuente, porque imputar un \'indice oficial equivaldr\'ia a fabricar dato institucional.
+
+\textbf{Criterios de longitud} (todos operativos internos, criterios C-DAT-001 a C-DAT-003 de la Tabla~\ref{tab:matriz_criterios}): m\'inimo computacional de 8 observaciones para ajustar modelos; advertencia por debajo de 18; recomendaci\'on de al menos 24 (dos a\~nos completos, que permiten observar variaci\'on anual). No existe un m\'inimo universal en la literatura para modelos de tendencia; estos valores se declaran como par\'ametros internos configurables y no como est\'andares.
+
+\textbf{C\'omo influye.} Una serie con menos de 8 observaciones v\'alidas o con errores cr\'iticos no genera proyecci\'on; el resultado explica la causa exacta.
+
+\section{Estad\'istica descriptiva}
+\label{sec:descriptiva}
+
+Se calculan media, mediana, m\'inimo, m\'aximo, desviaci\'on est\'andar y rango, siguiendo la pr\'actica est\'andar de an\'alisis exploratorio de datos \citep{nist_eda_summary}. Estos estad\'isticos son descriptivos: contextualizan la serie y alimentan las explicaciones de la interfaz, pero no aprueban ni niegan proyecciones por s\'i mismos.
+
+\section{Variaciones mensuales y acumuladas}
+\label{sec:variaciones}
+
+Para una serie $y_1,\dots,y_T$ se calculan la variaci\'on mensual porcentual (Ecuaci\'on~\ref{eq:var_mensual}), la diferencia simple y la diferencia logar\'itmica (Ecuaci\'on~\ref{eq:var_log}):
+
+\begin{equation}
+v_t = \frac{y_t - y_{t-1}}{y_{t-1}} \times 100
+\label{eq:var_mensual}
+\end{equation}
+
+\begin{equation}
+r_t = \ln\!\left(\frac{y_t}{y_{t-1}}\right)
+\label{eq:var_log}
+\end{equation}
+
+La diferencia logar\'itmica de la Ecuaci\'on~\ref{eq:var_log} es la base de los modelos sobre log-variaci\'on y de la detecci\'on del salto de cambio de a\~no, porque es aditiva en el tiempo y aproximadamente sim\'etrica para variaciones peque\~nas \citep{hyndman2021fpp3}. Ejemplo num\'erico: si $y_{t-1}=140{,}0$ y $y_t=141{,}4$, entonces $v_t=1{,}0\%$ y $r_t=\ln(141{,}4/140{,}0)=0{,}00995$.
+
+\section{Detecci\'on de valores at\'ipicos}
+\label{sec:atipicos}
+
+\textbf{Criterio} (C-ATI-001, bibliogr\'afico). Se usa el Z robusto modificado basado en mediana y desviaci\'on absoluta mediana (MAD), definido en la Ecuaci\'on~\ref{eq:zmod}:
+
+\begin{equation}
+M_i = \frac{0{,}6745\,(x_i - \tilde{x})}{\mathrm{MAD}}, \qquad \mathrm{MAD} = \mathrm{mediana}\left(|x_i - \tilde{x}|\right)
+\label{eq:zmod}
+\end{equation}
+
+donde $\tilde{x}$ es la mediana de la variable analizada y $0{,}6745$ es el factor de consistencia con la desviaci\'on est\'andar normal. Un punto se marca como posible at\'ipico cuando $|M_i| > 3{,}5$, el umbral recomendado por el manual NIST/SEMATECH de estad\'istica exploratoria \citep{nist_outliers}. La detecci\'on se aplica sobre variaci\'on mensual, diferencia simple y diferencia logar\'itmica, no sobre el nivel del \'indice, porque el nivel tiene tendencia y la tendr\'ia como ``at\'ipico'' todo extremo de la muestra.
+
+\textbf{Efecto sobre el flujo.} Los at\'ipicos \emph{solo se reportan}: no se eliminan, no se recortan y no modifican el modelado, porque un salto real de precios es informaci\'on econ\'omica y no un error de medici\'on. Los subrangos internos de severidad (leve/moderado/fuerte) que exist\'ian en versiones previas fueron eliminados por carecer de calibraci\'on emp\'irica (criterio C-ATI-002). La implementaci\'on est\'a en \texttt{analisis\_series.py} (funci\'on \texttt{detectar\_valores\_atipicos\_mad}) y su prueba en \texttt{pruebas/prueba\_auditoria\_estadistica\_app\_docs.py}, incluido el caso degenerado $\mathrm{MAD}=0$.
+
+\section{Detecci\'on del patr\'on de cambio de a\~no}
+\label{sec:calendario}
+
+Muchas series ICOCIV concentran parte de su variaci\'on anual en la transici\'on diciembre--enero, asociada a la actualizaci\'on anual de precios. Los efectos de calendario y estacionalidad son componentes cl\'asicos de las series mensuales \citep{hyndman2021fpp3}; su detecci\'on aqu\'i usa estad\'istica robusta sobre las variaciones logar\'itmicas de la Ecuaci\'on~\ref{eq:var_log}.
+
+\textbf{Detecci\'on} (C-CAL-001). Sea $\gamma$ la mediana de las transiciones diciembre--enero y $m$ la mediana de $|r_t|$ en los meses restantes. Hay evidencia de patr\'on cuando se cumplen las tres condiciones de la Ecuaci\'on~\ref{eq:calendario}:
+
+\begin{equation}
+K \geq 2, \qquad \frac{|\gamma|}{m} > 1{,}5, \qquad \text{consistencia de signo} \geq 0{,}6
+\label{eq:calendario}
+\end{equation}
+
+donde $K$ es el n\'umero de transiciones observadas. La recurrencia y la consistencia de signo distinguen un efecto de calendario de un valor at\'ipico aislado, que no se repite en la misma posici\'on del calendario. Medido sobre el anexo de mayo de 2026, las series con patr\'on presentan razones entre 4 y 9 y la serie de control (acero) queda en 0{,}36.
+
+Los valores de corte $2$, $1{,}5$ y $0{,}6$ son par\'ametros de decisi\'on internos calibrados sobre el propio anexo de aplicaci\'on, y esa es una de las razones del retiro que se describe a continuaci\'on.
+
+\textbf{El ajuste NO se aplica} (C-CAL-002; P0-F, 12 de agosto de 2026). La funci\'on \texttt{\_ajustar\_salto\_anual} fija \texttt{aplicado} $=$ \texttt{False} de forma incondicional: el pron\'ostico que la aplicaci\'on entrega es el del modelo base, sin factor de calendario, y la trayectoria no se modifica. Ning\'un componente del tratamiento resist\'ia la verificaci\'on completa:
+
+\begin{itemize}
+  \item $\gamma$, mediana de las transiciones observadas, no est\'a sustentado como \emph{estimador del salto futuro};
+  \item la forma $f_h = \exp(\gamma\,(n_h - h/12))$ carece de fuente, y su t\'ermino $-h/12$ es falso para el modelo \texttt{naive}, que no reparte crecimiento a lo largo del a\~no;
+  \item las tres puertas de activaci\'on ($K \geq 2$, raz\'on $> 1{,}5$, consistencia $\geq 0{,}6$) fueron calibradas sobre el mismo anexo con el que despu\'es se evaluaba el resultado;
+  \item el conjunto de horizontes de validaci\'on $(1,3,6)$ es una elecci\'on interna sin fuente.
+\end{itemize}
+
+\textbf{Lo que s\'i se publica.} El perfil se sigue \emph{midiendo}: $\gamma$, la raz\'on $|\gamma|/m$, la consistencia de signo y el n\'umero de transiciones son propiedades de la serie observada y se reportan como diagn\'ostico. El fen\'omeno est\'a medido y es contundente; lo que falta es un m\'etodo publicado para tratarlo. No se introduce ning\'un reemplazo: a\~nadir uno equivaldr\'ia a incorporar un candidato m\'as al cat\'alogo sin sustento.
+
+Se distinguen adem\'as \textbf{tres hechos independientes}, cada uno con su campo: el \emph{patr\'on detectado en la serie}, que no depende del horizonte; la \emph{geometr\'ia del horizonte} \textemdash{}cu\'antos eneros contiene y si cruza al menos uno\textemdash{}; y el \emph{efecto del tratamiento}, que exige simult\'aneamente que el tratamiento se aplique y que haya al menos un enero. Como el tratamiento no se aplica, el tercero es \texttt{False} aunque el horizonte cruce enero, y esa distinci\'on se comunica expl\'icitamente para que no se lea una cosa por otra. Implementaci\'on en \texttt{calendario\_anual.py}; pruebas en \texttt{tests/test\_ajuste\_salto\_anual.py}.
+
+\section{Modelos candidatos}
+\label{sec:modelos}
+
+Todos los modelos son interpretables y est\'an implementados en \texttt{modelos\_interpretables.py}. ARIMA no forma parte del alcance. Los candidatos se activan progresivamente (criterio C-MOD-001): el nivel 1 se ajusta siempre y el nivel 2 se activa seg\'un longitud, horizonte y alertas.
+
+\subsection{Benchmarks: Naive y Drift}
+
+El modelo Naive proyecta el \'ultimo valor observado (Ecuaci\'on~\ref{eq:naive}) y el modelo Drift le a\~nade el cambio promedio hist\'orico (Ecuaci\'on~\ref{eq:drift}), ambos definidos en \citep{hyndman2021fpp3}:
+
+\begin{equation}
+\hat{y}_{T+h} = y_T
+\label{eq:naive}
+\end{equation}
+
+\begin{equation}
+\hat{y}_{T+h} = y_T + h\,\frac{y_T - y_1}{T-1}
+\label{eq:drift}
+\end{equation}
+
+Ejemplo num\'erico: con $y_1=100$, $y_T=146$, $T=24$ y $h=3$, Naive proyecta $146$ y Drift proyecta $146 + 3\cdot 2 = 152$. La prueba \texttt{test\_naive\_y\_drift\_predicen\_lo\_esperado} verifica exactamente estos c\'alculos. Los benchmarks cumplen doble funci\'on: son candidatos leg\'itimos y son la vara de comparaci\'on (Secci\'on~\ref{sec:metricas}).
+
+\subsection{Suavizamiento exponencial: Holt lineal y amortiguado}
+
+El m\'etodo de Holt \citep{holt1957} extiende el suavizamiento exponencial a series con tendencia mediante las ecuaciones de nivel y pendiente (Ecuaci\'on~\ref{eq:holt}):
+
+\begin{equation}
+\begin{aligned}
+\ell_t &= \alpha y_t + (1-\alpha)(\ell_{t-1} + b_{t-1})\\
+b_t &= \beta(\ell_t - \ell_{t-1}) + (1-\beta)b_{t-1}\\
+\hat{y}_{T+h} &= \ell_T + h\,b_T
+\end{aligned}
+\label{eq:holt}
+\end{equation}
+
+La variante amortiguada de Gardner y McKenzie \citep{gardner_mckenzie1985} introduce un par\'ametro $\phi\in(0,1)$ que modera la tendencia (Ecuaci\'on~\ref{eq:holt_amortiguado}), evitando extrapolaciones lineales indefinidas en horizontes largos:
+
+\begin{equation}
+\hat{y}_{T+h} = \ell_T + (\phi + \phi^2 + \dots + \phi^h)\,b_T
+\label{eq:holt_amortiguado}
+\end{equation}
+
+Los coeficientes de suavizamiento son valores fijos de implementaci\'on y no se estiman a partir de cada serie: forman parte de la identidad del resultado. La ruta condicional que los optimizaba cuando \texttt{statsmodels} estaba instalado fue eliminada, porque hac\'ia que la misma serie produjera cifras distintas seg\'un el entorno. \texttt{statsmodels} es hoy dependencia obligatoria fijada a la versi\'on \texttt{0.14.6} y su uso se limita al diagn\'ostico Ljung--Box. ETS no forma parte del cat\'alogo de modelos que la aplicaci\'on ejecuta.
+
+\subsection{Regresiones sobre el nivel y sobre variaciones}
+
+El nivel 2 incluye regresi\'on lineal en el tiempo, regresi\'on logar\'itmica temporal, regresi\'on exponencial (log-lineal) y regresi\'on robusta de Huber, adem\'as de modelos sobre la variaci\'on mensual y la log-variaci\'on. Para la regresi\'on log-lineal, la retransformaci\'on de $\ln y$ a $y$ usa el estimador de smearing de Duan \citep{duan1983}, que corrige el sesgo de retransformaci\'on sin asumir normalidad de los residuos (Ecuaci\'on~\ref{eq:smearing}); la elecci\'on entre modelar en logaritmos o en niveles sigue las consideraciones de \citep{manning_mullahy2001}:
+
+\begin{equation}
+\hat{y}_t = \exp(\widehat{\ln y_t}) \cdot \frac{1}{T}\sum_{i=1}^{T} \exp(e_i)
+\label{eq:smearing}
+\end{equation}
+
+donde $e_i$ son los residuos en escala logar\'itmica. La regresi\'on robusta de Huber reduce la influencia de observaciones extremas frente a m\'inimos cuadrados ordinarios \citep{huber1964,penn_state_robust_regression}. La implementaci\'on utilizada es \texttt{sklearn.linear\_model.HuberRegressor} con $\epsilon=1{,}35$, $\alpha=0{,}0001$ y \texttt{max\_iter}$=2000$ \citep{sklearn_huberregressor}.
+
+\section{Validaci\'on fuera de muestra}
+\label{sec:oos}
+
+Ning\'un modelo se eval\'ua por su ajuste dentro de muestra. La capacidad predictiva se mide simulando c\'omo habr\'ia pronosticado el modelo en el pasado, con separaci\'on estricta entre datos de entrenamiento y de prueba \citep{tashman2000,hyndman2021fpp3}. Esta separaci\'on es la defensa principal contra el sobreajuste y contra las regresiones espurias \citep{granger_newbold1974}.
+
+\section{Walk-forward validation}
+\label{sec:wf}
+
+\textbf{Procedimiento} (implementado en \texttt{backtesting.py}). Se usa evaluaci\'on de origen rodante con ventana expansiva \citep{tashman2000,hyndman_tscv_2021,skforecast_backtesting_2026}: para cada origen $c$ desde el entrenamiento inicial hasta $T-h$, el modelo se \emph{reestima} con las observaciones $1,\dots,c$ y pronostica la observaci\'on $c+h$; el error $e_c = y_{c+h} - \hat{y}_{c+h}$ se registra junto con el modelo, el origen y la escala MASE de esa ventana.
+
+\textbf{Primer origen} (C-WF-002, \emph{pendiente de decisi\'on}). La f\'ormula anterior, $\max(18;\ 0{,}60\,T)$, fue \textbf{retirada} el 12 de agosto de 2026: eran literales sin fuente, y la proporci\'on se atribu\'ia a \citet{hyndman2021fpp3}, atribuci\'on que no resiste la verificaci\'on \textemdash{}FPP3 \S5.10, el procedimiento aqu\'i aplicado, no da ninguna proporci\'on, y la \'unica del libro (\S5.8) es «about 20\,\%» de conjunto de \emph{prueba} para una partici\'on \'unica.
+
+El primer origen vigente es $N_0 = \max_m N_{\min}(m)$ sobre los candidatos que compiten; con el cat\'alogo actual el binding es Holt amortiguado \textemdash{}cinco par\'ametros, luego seis observaciones para estimarlos\textemdash{}, de modo que $N_0 = 6$ es \textbf{el valor provisional actualmente implementado}. Lo que se deriva son las dos \emph{cotas}: $N_0 \geq \max_m N_{\min}(m)$ por comparabilidad entre candidatos y $N_0 \leq T-1$ por disponibilidad de al menos un par objetivo-horizonte. Entre ambas cotas las fuentes no eligen: FPP3 \S5.10 excluye las primeras observaciones «since it is not possible to obtain a reliable forecast based on a small training set», pero no operacionaliza «peque\~no».
+
+\textbf{Limitaci\'on declarada.} La elecci\'on del primer origen permanece como limitaci\'on metodol\'ogica declarada, y no es inocua: el valor decide el modelo entregado por C-SEL-001. Medido sobre el anexo vigente, 6 de 10 series cambian de modelo ganador seg\'un $N_0$, y 11 de 59 combinaciones $N_0$-serie. Esa sensibilidad se publica y \textbf{no} se usa para escoger $N_0$, porque elegir el valor que produce el resultado preferido ser\'ia optimizar contra la propia evidencia. Todo resultado viaja con \texttt{evidencia\_oos\_provisional} $=$ \texttt{True}.
+
+\textbf{Ausencia de fuga de informaci\'on.} Tres reglas la garantizan: el modelo se reestima en cada origen usando solo el pasado; la escala del MASE se calcula dentro de cada ventana de entrenamiento; y, cuando el ajuste calendario se evaluaba, el par\'ametro $\gamma$ se reestimaba por origen. Desde el 12 de agosto de 2026 ese ajuste \textbf{no se aplica} (P0-F): $\gamma$ se mide y se publica como diagn\'ostico, pero no modifica el pron\'ostico (\S\ref{sec:calendario}). La prueba \texttt{test\_walk\_forward\_reentrena\_y\_no\_filtra\_futuro} verifica ambas propiedades de forma anal\'itica: cada predicci\'on de Drift coincide con la f\'ormula cerrada calculada a mano con la historia previa, y un salto artificial en el \'ultimo dato no altera ninguna predicci\'on anterior.
+
+\textbf{Existencia de evidencia fuera de muestra} (C-HOR-003). El n\'umero de ventanas disponibles para un horizonte se obtiene por conteo directo del bucle:
+
+\begin{equation}
+W = T - N_0 - h + 1,
+\label{eq:ventanas_oos}
+\end{equation}
+
+de modo que existe al menos un error fuera de muestra si $W \geq 1$, es decir si $h \leq T - N_0$. Esta es una condici\'on de \textbf{existencia}, no de calidad: por debajo de una ventana el dato no existe, y eso no es un umbral elegido.
+
+Los tres tramos con que se comunica $W$ son \emph{descriptivos} y ninguno niega ni degrada: $W = 0$, «sin evidencia fuera de muestra disponible para este horizonte bajo el dise\~no vigente»; $W \in \{1,2\}$, «evidencia disponible pero muy limitada ($n=W$)»; $W \geq 3$, «evidencia disponible ($n=W$)». La aplicaci\'on \textbf{no} llama validado, suficiente, robusto ni certificado a un horizonte por su n\'umero de ventanas: los cortes 3 y 6 son fronteras de redacci\'on, no requisitos de aceptaci\'on. Los umbrales de error no se relajan en ning\'un tramo.
+
+La correspondencia entre la Ecuaci\'on~\ref{eq:ventanas_oos} y el n\'umero real de ventanas del backtesting est\'a verificada por prueba conductual en los bordes cortos ($T = 2 \dots 13$, $h = 1 \dots 4$), incluida la regi\'on $T \leq N_0$ en la que $W \leq 0$ y el backtesting devuelve cero ventanas.
+
+\section{M\'etricas de error}
+\label{sec:metricas}
+
+Las m\'etricas siguen las definiciones est\'andar del an\'alisis de exactitud de pron\'osticos \citep{hyndman_koehler2006,hyndman2021fpp3}. Para $n$ errores de predicci\'on $e_i = y_i - \hat{y}_i$:
+
+\begin{equation}
+MAE = \frac{1}{n}\sum_{i=1}^{n}|e_i|
+\label{eq:mae}
+\end{equation}
+
+\begin{equation}
+RMSE = \sqrt{\frac{1}{n}\sum_{i=1}^{n}e_i^{2}}
+\label{eq:rmse}
+\end{equation}
+
+\begin{equation}
+MAPE = \frac{100}{n}\sum_{i=1}^{n}\left|\frac{e_i}{y_i}\right|, \qquad y_i \neq 0
+\label{eq:mape}
+\end{equation}
+
+\begin{equation}
+sMAPE = \frac{100}{n}\sum_{i=1}^{n}\frac{2\,|e_i|}{|y_i|+|\hat{y}_i|}
+\label{eq:smape}
+\end{equation}
+
+\begin{equation}
+Sesgo = \frac{1}{n}\sum_{i=1}^{n} e_i
+\label{eq:sesgo}
+\end{equation}
+
+El MAPE excluye observaciones nulas para evitar divisiones por cero, y el sMAPE usa la forma acotada en $[0,200]$ discutida por \citep{hyndman_koehler2006}. El MASE escala el error frente al m\'etodo naive dentro de la muestra de entrenamiento (Ecuaci\'on~\ref{eq:mase}), lo que lo hace comparable entre series de escalas distintas \citep{hyndman_koehler2006}:
+
+\begin{equation}
+MASE = \frac{\frac{1}{n}\sum_{i=1}^{n}|e_i|}{\frac{1}{T-1}\sum_{t=2}^{T}|y_t - y_{t-1}|}
+\label{eq:mase}
+\end{equation}
+
+donde el denominador se calcula \emph{dentro de cada ventana de entrenamiento} del walk-forward, nunca con datos de prueba. Un MASE mayor que 1 indica error superior al del naive dentro de muestra y activa cautela (criterio C-MASE-001). Ejemplo num\'erico verificado por \texttt{test\_mase\_usa\_escala\_del\_entrenamiento}: con errores absolutos de prueba $\{1,1,1,2\}$ (MAE $=1{,}25$) y entrenamiento $\{90,92,96\}$ (escala $=3$), $MASE = 1{,}25/3 = 0{,}4167$.
+
+\textbf{Comparaci\'on contra benchmarks} (C-BEN-001). Para el modelo $M$ se calculan las razones de la Ecuaci\'on~\ref{eq:rrmse}:
+
+\begin{equation}
+rRMSE_{naive} = \frac{RMSE_M}{RMSE_{naive}}, \qquad rRMSE_{drift} = \frac{RMSE_M}{RMSE_{drift}}
+\label{eq:rrmse}
+\end{equation}
+
+Un modelo complejo que no mejora claramente a Naive y Drift en el mismo backtesting no se selecciona \citep{hyndman2021fpp3}. Las tolerancias (favorable $\leq 1{,}10$; claramente peor $> 1{,}25$) son operativas internas. Las bandas de MAPE y sMAPE usadas para comunicar confianza (criterios C-MAPE-001 y C-SMAPE-001) son igualmente par\'ametros internos de comunicaci\'on, no est\'andares: la literatura no fija cortes universales de MAPE v\'alidos para toda serie.
+
+\textbf{Errores extremos y estabilidad} (C-ERR-001, C-ERR-002, C-EST-001). Una ventana se marca como de error extremo cuando $|e|$ supera $\mathrm{mediana}(|e|) + 3\,\mathrm{MAD}$, uso robusto an\'alogo al criterio de at\'ipicos de la Secci\'on~\ref{sec:atipicos}. La estabilidad del error es el coeficiente de variaci\'on de $|e_i|$ entre ventanas; valores altos se\~nalan desempe\~no err\'atico aunque el promedio sea aceptable. Las bandas de proporci\'on de errores extremos (15\,\%, 25\,\%, 50\,\%) son pol\'itica interna de robustez.
+
+\section{Diagn\'ostico residual}
+\label{sec:residuos}
+
+Los residuos $e_t = y_t - \hat{y}_t$ del modelo seleccionado se revisan con:
+
+\textbf{Durbin--Watson} (Ecuaci\'on~\ref{eq:dw}; criterios C-DW-001 y C-DW-002). El estad\'istico
+
+\begin{equation}
+DW = \frac{\sum_{t=2}^{T}(e_t - e_{t-1})^2}{\sum_{t=1}^{T}e_t^2}
+\label{eq:dw}
+\end{equation}
+
+vale aproximadamente 2 sin autocorrelaci\'on de primer orden, se acerca a 0 con autocorrelaci\'on positiva y a 4 con negativa \citep{statsmodels_durbin_watson}. La aplicaci\'on no usa las tablas $d_L/d_U$ de significancia formal; interpreta el estad\'istico de forma descriptiva con rangos internos (cr\'itico fuera de $[0{,}8;\,3{,}2]$, advertencia fuera de $[1{,}5;\,2{,}5]$) y lo declara expl\'icitamente como diagn\'ostico descriptivo ---no como prueba concluyente--- para modelos no lineales o de suavizamiento, donde su distribuci\'on formal no aplica. La prueba \texttt{test\_durbin\_watson\_casos\_limite} verifica los casos extremos (residuos alternantes $\to DW>3{,}5$; persistentes $\to DW<0{,}5$).
+
+\textbf{Ljung--Box y Jarque--Bera} (C-RES-001). Cuando \texttt{statsmodels} est\'a disponible se ejecutan la prueba de autocorrelaci\'on conjunta de Ljung--Box y la de normalidad de Jarque--Bera al nivel de significancia convencional $\alpha=0{,}05$ \citep{statsmodels_ljungbox,statsmodels_jarque_bera}; en su ausencia, la aplicaci\'on usa respaldos propios (ACF/PACF aproximadas y valor $p$ de Jarque--Bera propio) e informa la limitaci\'on. Los resultados alimentan advertencias y penalizaciones, nunca un veto \'unico.
+
+\textbf{Sesgo y heterocedasticidad ligera} (C-RES-002, C-HET-001, C-SES-001). Se advierte cuando $|\bar{e}| > 0{,}25\,s_e$, cuando $|corr(|e_t|, t)| \geq 0{,}55$ o cuando $|Sesgo| > 0{,}75\,MAE$; los tres son criterios exploratorios internos declarados como tales.
+
+\section{Intervalos de predicci\'on}
+\label{sec:intervalos}
+
+\textbf{M\'etodo preferente} (C-INT-002): percentiles emp\'iricos centrados de los errores fuera de muestra \emph{del mismo horizonte}: percentiles 2,5/97,5 para el intervalo del 95\,\%, 'unico nivel publicado, y percentiles 10/90 para la banda interna del 80\,\% que solo interviene en la envolvente. No se mezclan errores de $h=1$ con errores de $h=12$, porque la incertidumbre crece con la distancia predictiva \citep{hyndman2021fpp3}.
+
+\textbf{Respaldo} (C-INT-001): cuando no hay suficientes errores emp\'iricos, se usa la aproximaci\'on normal de la Ecuaci\'on~\ref{eq:ic_normal} con advertencia expl\'icita sobre el supuesto:
+
+\begin{equation}
+IC_{80,h} = \hat{y}_{T+h} \pm 1{,}2816\,\sigma_h, \qquad IC_{95,h} = \hat{y}_{T+h} \pm 1{,}96\,\sigma_h
+\label{eq:ic_normal}
+\end{equation}
+
+donde $\sigma_h$ es la desviaci\'on est\'andar de los errores fuera de muestra del horizonte $h$ y los cuantiles son los de la distribuci\'on normal est\'andar. Los intervalos se presentan como rangos de incertidumbre estimada, nunca como garant\'ia de cobertura: con pocas ventanas, la cobertura emp\'irica de un intervalo del 95\,\% no puede verificarse con precisi\'on \citep{hyndman2021fpp3}.
+
+\textbf{Ancho relativo} (C-INT-003). Para cada horizonte se calcula la Ecuaci\'on~\ref{eq:ancho}:
+
+\begin{equation}
+A_h = \frac{IC95_{sup,h} - IC95_{inf,h}}{\hat{y}_{T+h}}
+\label{eq:ancho}
+\end{equation}
+
+Las bandas de clasificaci\'on por tramo de horizonte (de 0,10 en uso operativo hasta 0,75 exploratorio) son pol\'itica interna de comunicaci\'on de incertidumbre, declarada como tal. Las pruebas de intervalos verifican que la banda interna del 80\,\% quede contenida en la del 95\,\%, que el valor puntual quede dentro de ambas y que el semiancho no decrezca con el horizonte. Solo la banda del 95\,\% se publica al usuario.
+
+\section{Selecci\'on del modelo}
+\label{sec:seleccion}
+
+\textbf{Un \'unico modelo por serie.} La aplicaci\'on selecciona un solo modelo para toda la trayectoria, eligiendo el que gana m\'as horizontes en el backtesting comparativo con ponderaci\'on $1/h$ (los horizontes cortos, mejor medidos y m\'as usados, pesan m\'as). Esto garantiza que los primeros valores proyectados no cambien con el horizonte solicitado y que clasificaci\'on, m\'etricas, intervalos y trayectoria correspondan al mismo modelo. Los desempates favorecen la parsimonia y los benchmarks trazables.
+
+\textbf{Por qu\'e no hay combinaci\'on de pron\'osticos.} La combinaci\'on ponderada por $1/RMSE$ se midi\'o sobre 40 series y 720 comparaciones separando calibraci\'on y evaluaci\'on (los pesos se estimaron con la primera mitad de los or\'igenes walk-forward y se midieron en la segunda). El resultado fue concluyente: la variante de pesos por horizonte rompe la consistencia de la trayectoria y pierde frente al modelo \'unico en horizontes cortos; la variante de pesos fijos por serie ---la \'unica compatible con la consistencia--- gan\'o solo 312 de 720 comparaciones y empeor\'o el RMSE un 9{,}1\,\% en promedio. La mejora aparente del 13{,}4\,\% que arrojaba la medici\'on sin separar calibraci\'on de evaluaci\'on proven\'ia de esa fuga, un resultado coherente con las advertencias generales sobre evaluaci\'on fuera de muestra \citep{tashman2000}. Por eso el ensamble fue retirado del sistema.
+
+\textbf{Fallos de ajuste.} Un modelo que no converge o produce predicciones no finitas queda descartado con su raz\'on registrada; los descartes se reportan en la interfaz y los informes.
+
+\section{Horizonte recomendado y horizonte admisible}
+\label{sec:horizonte}
+
+Cada horizonte $h$ desde 1 hasta el l\'imite operativo se clasifica con el modelo seleccionado seg\'un cuatro dimensiones: ventanas de evidencia disponibles (Secci\'on~\ref{sec:wf}), m\'etricas de error contra sus umbrales, comparaci\'on contra benchmarks y ancho relativo del IC95. La clasificaci\'on distingue:
+
+\begin{itemize}
+  \item \textbf{Proyecci\'on t\'ecnica}: evidencia suficiente y desempe\~no dentro de umbrales.
+  \item \textbf{Proyecci\'on con cautela}: admisible con advertencia expl\'icita (banda intermedia de incertidumbre o alertas no cr\'iticas).
+  \item \textbf{Escenario}: calculable solo como referencia, por evidencia reducida o incertidumbre alta.
+  \item \textbf{No viable}: se niega, indicando si la causa es falta de ventanas (no medible) o desempe\~no medido inaceptable.
+\end{itemize}
+
+El \textbf{m\'aximo recomendado} es el \'ultimo horizonte consecutivo clasificado como t\'ecnico; el \textbf{m\'aximo admisible} incluye adem\'as los aceptados como escenario. La evaluaci\'on es consecutiva: un corte no viable en $h$ detiene la cadena, porque un horizonte posterior no puede ser m\'as defendible que uno anterior fallido. El l\'imite operativo de b\'usqueda (18, 24 o 30 meses seg\'un longitud del historial, C-HOR-002) es un acotamiento computacional, no un m\'aximo estad\'istico; los accesos r\'apidos de la interfaz (1, 3, 6, 12, 18) son una decisi\'on de usabilidad (C-HOR-001).
+
+\section{Criterios de advertencia, escenario, bloqueo o rechazo}
+\label{sec:decision}
+
+Una proyecci\'on se \textbf{genera} cuando la serie supera la validaci\'on de datos y el horizonte solicitado es clasificable al menos como escenario. Se \textbf{genera con advertencia} cuando existen cautelas (evidencia reducida, banda intermedia de incertidumbre, sesgo direccional, benchmark seleccionado en horizonte largo, patr\'on calendario detectado pero no aplicado). Se \textbf{niega} cuando hay errores cr\'iticos de datos, cuando el horizonte excede el m\'aximo admisible o cuando el desempe\~no medido es inaceptable; el mensaje explica la causa dominante en orden: presupuesto de datos, cadena de horizontes, causa gen\'erica. Ninguna m\'etrica act\'ua como veto \'unico: las decisiones combinan evidencia, error, incertidumbre y diagn\'ostico, y toda negaci\'on es explicable.
+
+\section{Reproducibilidad}
+\label{sec:reproducibilidad}
+
+Todo resultado incluye los elementos necesarios para reproducirlo: archivo fuente y ruta jer\'arquica, periodos y observaciones usadas, modelo y par\'ametros, definici\'on del \'indice temporal, horizonte, proyecciones, intervalos con su m\'etodo de construcci\'on, m\'etricas por horizonte, advertencias y firma de la serie. El CSV reproducible exporta estos campos junto con la trazabilidad del ajuste calendario y la versi\'on de los criterios; los informes DOCX, PDF y HTML presentan la misma informaci\'on. La consistencia entre interfaz, exportables y c\'alculo est\'a protegida por pruebas.
+
+\section{Trazabilidad de criterios}
+\label{sec:trazabilidad}
+
+Los umbrales est\'an centralizados en \texttt{app\_icociv/estadistica/criterios.py}, donde cada uno se registra con identificador, tipo (bibliogr\'afico, est\'andar estad\'istico, computacional u operativo interno), valor, sustento, justificaci\'on y acci\'on de gobierno. La matriz se exporta a Markdown para auditor\'ia (\texttt{docs/auditoria\_criterios\_estadisticos.md}) y la Tabla~\ref{tab:matriz_criterios} de este documento se genera autom\'aticamente desde ese registro, de modo que el c\'odigo y este anexo no pueden divergir silenciosamente. La prueba \texttt{test\_matriz\_criterios\_cubre\_constantes\_clave} exige que cada familia de umbrales tenga entrada en la matriz.
+
+\section{Limitaciones metodol\'ogicas}
+\label{sec:limitaciones}
+
+\begin{enumerate}
+  \item Los umbrales operativos internos (bandas de MAPE/sMAPE, anchos relativos, proporciones de errores extremos) no son est\'andares universales; est\'an documentados, tipificados y son configurables, pero su calibraci\'on fina depende del contexto ICOCIV.
+  \item Con series de 65 observaciones, los horizontes largos disponen de pocas ventanas de validaci\'on (9 en $h=18$); la incertidumbre de las propias m\'etricas de error es mayor all\'i, y por eso la clasificaci\'on degrada a escenario antes de negar.
+  \item Los intervalos de predicci\'on derivan su amplitud de los errores hist\'oricos del modelo base; no incorporan la incertidumbre de estimar $\gamma$ en el ajuste calendario ni cambios estructurales futuros.
+  \item El estad\'istico Durbin--Watson se usa sin tablas de significancia y fuera de OLS solo como descriptivo; Ljung--Box y Jarque--Bera dependen de la disponibilidad de \texttt{statsmodels}.
+  \item La detecci\'on del patr\'on calendario se estima con pocas transiciones diciembre--enero ($K=5$ en el anexo vigente); un cambio metodol\'ogico del DANE invalidar\'ia la estimaci\'on hist\'orica.
+  \item Los resultados son estimaciones estad\'isticas de apoyo t\'ecnico; no reemplazan la producci\'on oficial del DANE ni el criterio del profesional responsable \citep{dane2021metodologia}.
+\end{enumerate}
+
+\section{Matriz de criterios y fuentes}
+\label{sec:matriz}
+
+La Tabla~\ref{tab:matriz_criterios} contiene los 29 criterios auditables con su tipo, valor, sustento e implementaci\'on. La columna de tipo es la salvaguarda central: solo los criterios marcados como bibliogr\'aficos o est\'andares invocan una fuente externa; los operativos internos se declaran como par\'ametros propios.
+
+\input{tabla_criterios}
+
+La Tabla~\ref{tab:control_biblio} resume el control bibliogr\'afico: qu\'e criterio respalda cada fuente y su enlace de verificaci\'on.
+
+\begin{table}[H]
+\centering
+\caption{Matriz de control bibliogr\'afico del documento.}
+\label{tab:control_biblio}
+\scriptsize
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{@{}p{3.6cm}p{5.2cm}p{7.2cm}@{}}
+\toprule
+\textbf{Clave BibTeX} & \textbf{Criterio o afirmaci\'on respaldada} & \textbf{Verificaci\'on} \\
+\midrule
+hyndman2021fpp3 & Naive, Drift, benchmarks, estacionalidad, intervalos, log-variaciones & \url{https://otexts.com/fpp3/} \\
+hyndman\_tscv\_2021 & Validaci\'on cruzada temporal con origen rodante & \url{https://otexts.com/fpp3/tscv.html} \\
+hyndman\_koehler2006 & MASE, sMAPE, limitaciones del MAPE & \url{https://robjhyndman.com/papers/forecast-accuracy.pdf} \\
+tashman2000 & Evaluaci\'on fuera de muestra, rolling origin & DOI 10.1016/S0169-2070(00)00065-0 \\
+holt1957 & Suavizamiento exponencial con tendencia & DOI 10.1016/j.ijforecast.2003.09.015 \\
+gardner\_mckenzie1985 & Tendencia amortiguada ($\phi$) & DOI 10.1287/mnsc.31.10.1237 \\
+duan1983 & Estimador de smearing para retransformaci\'on & DOI 10.1080/01621459.1983.10478017 \\
+manning\_mullahy2001 & Modelar en logaritmos frente a niveles & \url{https://www.nber.org/system/files/working_papers/t0246/t0246.pdf} \\
+granger\_newbold1974 & Riesgo de regresi\'on espuria & DOI 10.1016/0304-4076(74)90034-7 \\
+springer\_spurious\_regressions & Regresiones espurias (s\'intesis) & \url{https://link.springer.com/rwe/10.1007/978-1-349-58802-2_1592} \\
+nist\_outliers & Z modificado con MAD, umbral 3,5 & \url{https://www.itl.nist.gov/div898/handbook/eda/section3/eda35h.htm} \\
+nist\_eda\_summary & Estad\'istica exploratoria descriptiva & \url{https://www.itl.nist.gov/div898/handbook/eda/eda.htm} \\
+statsmodels\_durbin\_watson & C\'alculo e interpretaci\'on de DW & \url{https://www.statsmodels.org/stable/generated/statsmodels.stats.stattools.durbin_watson.html} \\
+statsmodels\_ljungbox & Prueba de Ljung--Box & \url{https://www.statsmodels.org/stable/generated/statsmodels.stats.diagnostic.acorr_ljungbox.html} \\
+statsmodels\_jarque\_bera & Prueba de Jarque--Bera & \url{https://www.statsmodels.org/stable/generated/statsmodels.stats.stattools.jarque_bera.html} \\
+statsmodels\_rlm & Regresi\'on robusta (Huber) & \url{https://www.statsmodels.org/stable/rlm.html} \\
+penn\_state\_robust\_regression & Regresi\'on robusta (contexto docente) & \url{https://online.stat.psu.edu/stat501/Topic1Robustregression.html} \\
+skforecast\_backtesting\_2026 & Pr\'actica de backtesting con ventana expansiva & \url{https://skforecast.org/0.15.0/user_guides/backtesting.html} \\
+dane2021metodologia & Metodolog\'ia general ICOCIV & \url{https://www.dane.gov.co/files/investigaciones/fichas/construccion/DSO-ICOCIV-MET-001.pdf} \\
+dane\_ficha\_icociv & Ficha metodol\'ogica ICOCIV & \url{https://www.dane.gov.co/index.php/estadisticas-por-tema/precios-y-costos/indice-de-costos-de-la-construccion-de-obras-civiles-icociv} \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+\section*{Nota sobre las citas}
+\addcontentsline{toc}{section}{Referencias}
+
+Las referencias completas aparecen a continuaci\'on con sus URL o DOI activos. Todas fueron verificadas contra su fuente en la auditor\'ia bibliogr\'afica del proyecto (\texttt{referencias\_bibliograficas/auditoria\_referencias.md}).
+
+\bibliographystyle{apalike}
+\bibliography{referencias}
+
+\end{document}

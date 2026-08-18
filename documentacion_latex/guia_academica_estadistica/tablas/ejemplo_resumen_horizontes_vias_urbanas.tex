@@ -1,0 +1,21 @@
+\begin{table}[H]
+\centering
+\caption{Separación de conceptos de horizonte en la ejecución real}
+\label{tab:ejemplo_resumen_horizontes_vias_urbanas}
+\scriptsize
+\begin{adjustbox}{max width=\linewidth}
+\begin{tabular}{p{0.20\linewidth}p{0.35\linewidth}p{0.14\linewidth}p{0.22\linewidth}}
+\toprule
+Concepto & Definición operativa & Valor real & Uso en la aplicación \\
+\midrule
+Horizonte solicitado & Meses pedidos por el usuario. & 18 & Resultado principal. \\
+Máximo recomendado & Último h técnico consecutivo desde h=1. & 12 & Límite de proyección técnica. \\
+Máximo como escenario & Último h clasificado explícitamente como escenario. & 20 & Escenario de alta incertidumbre. \\
+Máximo evaluado & Último h con evaluación fuera de muestra. & 20 & Borde de la grilla evaluada. \\
+Límite operativo & Máximo configurado para la auditoría. & 30 & Control computacional, no recomendación. \\
+Primer no viable & Primer h evaluado y clasificado como no admisible. & No identificado & Punto explícito de bloqueo. \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\par\footnotesize\textit{Fuente: Elaboración propia con datos extraídos del anexo oficial ICOCIV del DANE y cálculos reproducibles de la aplicación.}
+\end{table}

@@ -1,0 +1,11 @@
+pandas
+numpy
+scipy
+scikit-learn
+pyxlsb
+openpyxl
+python-docx
+matplotlib
+PySide6
+reportlab
+statsmodels==0.14.6

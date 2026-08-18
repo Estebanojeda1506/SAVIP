@@ -1,0 +1,1011 @@
+﻿\documentclass[12pt,letterpaper]{article}
+
+% Proyecto LaTeX liviano para Overleaf Free.
+% Compilacion recomendada: pdflatex -> bibtex -> pdflatex -> pdflatex.
+\usepackage[spanish,es-nodecimaldot]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=1in]{geometry}
+\usepackage{setspace}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{enumitem}
+\usepackage{float}
+\usepackage{pdflscape}
+\usepackage{adjustbox}
+\usepackage{tikz}
+\usepackage[natbibapa]{apacite}
+\usepackage[hidelinks]{hyperref}
+\usepackage{url}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric}
+
+\bibliographystyle{apacite}
+\providecommand{\parencite}{\citep}
+\renewcommand{\refname}{Referencias bibliograficas}
+\setcounter{tocdepth}{2}
+\setlength{\parindent}{0.5in}
+\setlength{\parskip}{0pt}
+\doublespacing
+\sloppy
+
+\hypersetup{
+  pdftitle={Guía académica para la comprensión del análisis estadístico y predictivo de la aplicación ICOCIV},
+  pdfauthor={Esteban Ojeda}
+}
+
+\newcommand{\ICOCIV}{ICOCIV}
+\newcommand{\yhat}{\hat{y}}
+\newcommand{\RMS}{RMSE}
+\newcommand{\MAE}{MAE}
+\newcommand{\MAPE}{MAPE}
+\newcommand{\SMAPE}{sMAPE}
+\newcommand{\MASE}{MASE}
+
+\begin{document}
+
+\begin{titlepage}
+    \centering
+    \vspace*{1.4cm}
+    {\Large\bfseries Guía académica para la comprensión del análisis estadístico y predictivo de la aplicación ICOCIV\par}
+    \vspace{0.5cm}
+    {\large Documento academico-metodologico para sustentacion de modelado estadistico, validacion predictiva y proyeccion de indices de costos de obras civiles\par}
+    \vspace{1.6cm}
+    {\large Autor: Esteban Ojeda\par}
+    \vspace{0.4cm}
+    {\large Universidad del Cauca\par}
+    {\large Programa de Ingenieria Civil\par}
+    \vspace{0.8cm}
+    {\large Popayan, Colombia\par}
+    {\large 2026\par}
+    \vspace{0.8cm}
+    {\large Version 1.1\par}
+    \vfill
+    {\small Documento elaborado como soporte teorico y metodologico de una aplicacion para analisis, validacion temporal y construccion de escenarios de proyeccion de series oficiales del Indice de Costos de la Construccion de Obras Civiles del DANE.}
+\end{titlepage}
+
+\pagenumbering{roman}
+\tableofcontents
+\newpage
+\pagenumbering{arabic}
+
+\section{Introducción}
+
+El proposito de este documento es explicar, de manera gradual y rigurosa, el analisis estadistico utilizado por la aplicacion \ICOCIV. La aplicacion trabaja con series mensuales del Indice de Costos de la Construccion de Obras Civiles, publicadas o extraidas desde anexos oficiales del Departamento Administrativo Nacional de Estadistica (DANE). Su funcion no consiste en reemplazar la operacion estadistica oficial, ni en recalcular desde cero la canasta, los ponderadores o los relativos de precios definidos por el DANE. Su funcion es tomar una serie oficial ya publicada, correspondiente a un nivel jerarquico seleccionado por el usuario, y someterla a analisis descriptivo, validacion temporal, comparacion de modelos, backtesting y proyeccion.
+
+La necesidad de este enfoque surge porque los indices economicos de costos no son observaciones independientes sin orden. Cada dato mensual depende del comportamiento anterior de la serie, de la dinamica de insumos, de la persistencia de precios, de cambios de mercado y de posibles choques sectoriales. Por esta razon, una proyeccion responsable debe tratar el problema como una serie temporal: el pasado se usa para pronosticar el futuro, y la calidad del modelo se evalua simulando pronosticos historicos fuera de muestra.
+
+El documento esta escrito para estudiantes y profesionales de ingenieria civil con conocimientos basicos de estadistica descriptiva. Se inicia con los conceptos elementales de una serie mensual, avanza hacia modelos interpretables de pronostico, explica la validacion walk-forward y termina con criterios de seleccion por horizonte, intervalos de prediccion y determinacion dinamica del horizonte maximo. La idea central es que una proyeccion no se justifica por verse visualmente razonable ni por tener buen ajuste dentro de muestra. Se justifica si muestra desempeno aceptable cuando se evalua en datos no usados para entrenar el modelo \citep{tashman2000,hyndman2021fpp3}.
+
+En el contexto de la ingeniería económica, la lectura temporal de costos apoya la planeación y la comparación de magnitudes en distintos periodos, sin convertir una estimación estadística en una garantía contractual \citep{mcgraw_dieter_tvm_2021}. En consecuencia, \textbf{el horizonte solicitado por el usuario es una solicitud de análisis, no una garantía de proyección}.
+
+\section{Contexto del ICOCIV y naturaleza del índice}
+
+El \ICOCIV{} es una operacion estadistica del DANE orientada a medir la evolucion de los costos asociados a la construccion de obras civiles. De acuerdo con la metodologia oficial, el indice organiza la medicion mediante una estructura jerarquica, una canasta de bienes y servicios, ponderadores y relativos de precios \citep{dane2021metodologia}. En la publicacion institucional del DANE se reporta que la medicion considera grupos, subclases CPC, tipologias de obra, capitulos constructivos asociados y agregaciones por grupos de costo e insumos \citep{dane_icociv_web}. Esta jerarquia permite que un usuario no analice solamente un indice agregado, sino tambien niveles tecnicos mas especificos.
+
+Un indice de costos no es un precio absoluto. Es una medida relativa que permite comparar el nivel de costos de un periodo frente a una base. En terminos practicos, si una serie pasa de 100 a 120, no significa que el costo monetario de una obra sea 120 pesos; significa que el nivel del indice aumento 20\% respecto a la escala de referencia correspondiente. Por ello, la app trabaja con niveles del indice, variaciones porcentuales, factores de actualizacion y escenarios de proyeccion.
+
+Es fundamental establecer el alcance metodologico:
+
+\begin{quote}
+La aplicacion no reemplaza ni modifica la metodologia oficial del DANE. Utiliza series oficiales del \ICOCIV{} como insumo para analisis exploratorio, validacion temporal y construccion de escenarios de proyeccion.
+\end{quote}
+
+Cuando el usuario selecciona, por ejemplo, un grupo CPC, una subclase CPC, una tipologia de obra, un capitulo constructivo, un grupo de costo o un insumo, la proyeccion corresponde unicamente a la serie de ese nivel. No se debe interpretar como una proyeccion de toda la operacion estadistica nacional. La ruta jerarquica seleccionada forma parte de la trazabilidad del analisis y debe aparecer en el informe para que el resultado sea reproducible y correctamente interpretable.
+
+\input{tablas/ejemplo_ruta_vias_urbanas.tex}
+
+\section{Flujo metodológico de la aplicación}
+
+El flujo estadistico de la aplicacion se organiza como una cadena reproducible. Primero se selecciona una serie oficial del \ICOCIV{} mediante su tabla y ruta jerarquica. Luego se valida la estructura temporal, se calculan descriptivos y variaciones, se define el conjunto de horizontes y se ejecuta una politica progresiva de modelos. La seleccion final no se basa en un unico indicador, sino en evidencia fuera de muestra por horizonte, comparacion contra benchmarks e incertidumbre de los intervalos.
+
+La Figura \ref{fig:flujo_preparacion_modelado} resume la preparacion de la serie, la validacion de datos y la definicion del conjunto de modelos candidatos. La Figura \ref{fig:flujo_validacion_exportacion} muestra la etapa posterior: validacion walk-forward, metricas por horizonte, seleccion, clasificacion del horizonte maximo y exportacion documental.
+
+\input{figuras/flujo_preparacion_modelado.tex}
+\input{figuras/flujo_validacion_exportacion.tex}
+
+\section{Paso a paso del análisis estadístico realizado por la aplicación}
+\label{sec:paso_a_paso_app}
+
+El procedimiento implementado separa la solicitud del usuario, la evaluación estadística y la presentación de resultados. El orden operativo es el siguiente:
+
+\begin{enumerate}[leftmargin=*,label=\textbf{Paso \arabic*.}]
+    \item \textbf{Selección de la ruta jerárquica ICOCIV.} El usuario elige el grupo, la subclase CPC, la tipología de obra, el capítulo constructivo, el grupo de costos o el insumo disponible en el anexo oficial. La ruta seleccionada identifica una sola serie y se conserva como trazabilidad \citep{dane2021metodologia,dane_ficha_icociv,dane_icociv_web}.
+
+    \item \textbf{Construcción de la serie histórica.} La aplicación toma la fila correspondiente, asocia cada columna mensual con su periodo y construye pares \((Periodo,Indice)\), ordenados cronológicamente. No mezcla niveles jerárquicos ni recalcula la canasta oficial.
+
+    \item \textbf{Validación inicial.} Se revisan longitud, meses faltantes, duplicados, continuidad, valores no numéricos, no finitos y no positivos. Un problema crítico impide modelar; una condición no crítica queda registrada como advertencia.
+
+    \item \textbf{Análisis descriptivo.} Se calculan media, mediana, mínimo, máximo, desviación, coeficiente de variación, cambios mensuales, variación acumulada y atípicos robustos. Estos valores describen la serie, pero no prueban por sí solos capacidad predictiva \citep{nist_eda_summary,nist_outliers}.
+
+    \item \textbf{Definición de modelos candidatos.} Siempre se consideran referencias simples como Naive, Drift, Holt lineal y Holt amortiguado. Regresiones, modelos sobre variaciones y métodos robustos se activan únicamente cuando la longitud y el comportamiento de la serie lo justifican \citep{hyndman2021fpp3,huber1964}. ETS y las combinaciones de modelos se describen en esta guía como métodos de la literatura; no forman parte del catálogo que SAVIP ejecuta.
+
+    \item \textbf{Backtesting walk-forward.} Para cada origen \(r\), el modelo se entrena solo con información disponible hasta ese mes y predice \(h\) meses adelante. La evaluación respeta la dirección pasado--futuro y evita fuga de información \citep{tashman2000,hyndman_tscv_2021,skforecast_backtesting_2026}.
+
+    \item \textbf{Cálculo de métricas.} Los errores fuera de muestra se resumen mediante MAE, RMSE, MAPE, sMAPE, MASE, sesgo, estabilidad y proporción de errores extremos. Las métricas se calculan por horizonte y se leen conjuntamente \citep{hyndman_koehler2006}.
+
+    \item \textbf{Evaluación mensual continua de horizontes.} La auditoría recorre \(h=1,2,3,\ldots,H\). Los botones de la interfaz son atajos de solicitud; no sustituyen la grilla mensual ni fijan el máximo recomendado.
+
+    \item \textbf{Clasificación de cada horizonte.} Cada \(h\) puede quedar como proyección técnica admisible, escenario de alta incertidumbre, no recomendable o no evaluado por falta de evidencia. El último evaluado no se convierte automáticamente en recomendado.
+
+    \item \textbf{Separación entre resultado solicitado y análisis completo.} El resultado principal responde exactamente al horizonte pedido. Las tablas auxiliares conservan toda la evaluación mensual, incluidos horizontes distintos del solicitado.
+
+    \item \textbf{Selección del modelo final.} Se priorizan desempeño fuera de muestra, comparación frente a Naive y Drift, estabilidad, sesgo, incertidumbre, errores disponibles y coherencia de trayectoria. AIC o AICc se usan dentro de familias comparables, no como sustituto del backtesting \citep{hyndman_khandakar2008,hyndman2021fpp3}.
+
+    \item \textbf{Intervalos de predicción.} Se calcula el intervalo de prediccion del 95\,\% con los errores fuera de muestra del horizonte exacto y del modelo pertinentes; la banda interna del 80\,\% solo interviene en la envolvente y no se publica. Si la evidencia OOS no alcanza y se usa un respaldo in-sample, el informe lo identifica como limitación \citep{hyndman2021fpp3}.
+
+    \item \textbf{Decisión final.} La aplicación permite una proyección técnica, la presenta solo como escenario, restringe el alcance o la niega. Si el horizonte solicitado no es admisible, no genera una trayectoria de otro horizonte como si respondiera a la solicitud.
+
+    \item \textbf{Presentación en interfaz e informes.} La UI muestra el índice solicitado, estado, modelo e intervalos cuando fueron generados. El detalle técnico presenta métricas, criterios de selección, evaluación por horizonte y advertencias.
+
+    \item \textbf{Exportables y trazabilidad.} PDF, DOCX, HTML y CSV registran ruta, serie, modelo, parámetros, métricas, horizonte solicitado, máximos clasificados, razón de parada y advertencias, de modo que el análisis pueda ser revisado y reproducido.
+\end{enumerate}
+
+\section{Regla de trazabilidad y clasificación de criterios}
+
+Para evitar afirmaciones metodologicas sin respaldo, este documento clasifica cada formula, definicion, tabla, figura, umbral o decision tecnica en una categoria de sustento. Un \textbf{criterio bibliografico} proviene de literatura academica o manuales tecnicos reconocidos. Un \textbf{criterio metodologico oficial} proviene del DANE y de la metodologia oficial del \ICOCIV{}. Un \textbf{criterio estadistico estandar} corresponde a definiciones matematicas ampliamente aceptadas. Un \textbf{criterio empirico calibrado} se obtiene a partir de datos, backtesting, percentiles, simulaciones o analisis de sensibilidad. Un \textbf{criterio computacional} se debe a convergencia, estabilidad numerica, longitud de serie o disponibilidad de librerias. Finalmente, un \textbf{criterio operativo interno} es una decision de diseno de la app; por tanto, debe presentarse como regla parametrizable, no como verdad universal.
+
+La Tabla \ref{tab:matriz_criterios_metodologicos} consolida esta clasificacion al final del documento. Cuando un umbral no procede directamente de una referencia bibliografica, se declara como operativo interno y se vincula con su funcion practica, su impacto en la app y la necesidad de validarlo o recalibrarlo con evidencia historica.
+
+\section{Matriz de trazabilidad conceptual}
+
+Para que el analisis sea auditable, cada componente estadistico debe tener una funcion precisa dentro del flujo. La Tabla \ref{tab:matriz_conceptual} resume, de forma operativa, como se conectan definicion, proposito, implementacion, interpretacion y referencia. Esta matriz evita que las metricas se presenten como resultados aislados: cada valor reportado en la aplicacion debe responder a una pregunta metodologica concreta.
+
+Ademas de esta matriz conceptual, la aplicacion mantiene una matriz de auditoria de criterios estadisticos en \texttt{docs/auditoria\_criterios\_estadisticos.md}. Alli cada umbral interno se clasifica como bibliografico, estadistico estandar, computacional o criterio operativo interno. Esta separacion es importante: los parametros operativos de la app ayudan a comunicar cautelas y decisiones, pero no deben presentarse como reglas universales de la literatura.
+
+\begin{longtable}{p{0.18\linewidth}p{0.22\linewidth}p{0.24\linewidth}p{0.24\linewidth}}
+\caption{Matriz de trazabilidad conceptual del analisis estadistico}\label{tab:matriz_conceptual}\\
+\toprule
+\textbf{Componente} & \textbf{Definicion y proposito} & \textbf{Implementacion en la aplicacion} & \textbf{Interpretacion y referencia} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Componente} & \textbf{Definicion y proposito} & \textbf{Implementacion en la aplicacion} & \textbf{Interpretacion y referencia} \\
+\midrule
+\endhead
+Validacion temporal & Verifica que la serie represente meses reales, consecutivos y ordenados. & Normaliza periodos a formato anio-mes, revisa duplicados, saltos, faltantes, meses invalidos y trazabilidad del archivo fuente. & Sin continuidad, el modelo puede confundir saltos de calendario con variaciones economicas reales; el orden temporal es condicion de evaluacion predictiva \citep{tashman2000,hyndman2021fpp3}. \\
+\addlinespace
+Estadistica descriptiva & Resume nivel, dispersion y recorrido historico de la serie. & Calcula observaciones, minimo, maximo, media, mediana, desviacion estandar, coeficiente de variacion, primer y ultimo periodo. & Permite entender la serie antes de pronosticar; no sustituye validacion predictiva \citep{nist_eda_summary}. \\
+\addlinespace
+Variacion mensual & Mide el cambio porcentual frente al mes anterior. & Se calcula como \(\Delta_t = \frac{y_t - y_{t-1}}{y_{t-1}}\times 100\) y se grafica con fechas reales. & Ayuda a detectar aceleraciones, saltos y episodios atipicos; su lectura se vincula con variaciones e indices oficiales reportados por el DANE \citep{dane2021metodologia}. \\
+\addlinespace
+Atipicos robustos & Identifica cambios inusuales sin depender de media y desviacion estandar. & Usa puntaje modificado con mediana y MAD sobre variaciones, diferencias o log-variaciones. & Un atipico no se elimina automaticamente; se reporta como advertencia tecnica \citep{nist_outliers}. \\
+\addlinespace
+Naive & Benchmark que conserva el ultimo valor observado. & Para \(h\) meses, \(\yhat_{T+h}=y_T\). & Si un modelo complejo no supera Naive, su valor predictivo es debil \citep{hyndman2021fpp3}. \\
+\addlinespace
+Drift & Benchmark con cambio promedio historico. & Extiende la pendiente \((y_T-y_1)/(T-1)\) hacia el horizonte \(h\). & Es simple, trazable y puede superar regresiones cuando la serie tiene escalones persistentes \citep{hyndman2021fpp3}. \\
+\addlinespace
+Holt lineal y amortiguado & Suavizamiento exponencial con nivel y tendencia. & Estima \(\alpha\), \(\beta\) y, si aplica, \(\phi\); se reentrena en cada origen de backtesting. & La tendencia amortiguada evita extrapolaciones lineales excesivas \citep{holt1957,hyndman2021fpp3}. \\
+\addlinespace
+Regresiones tradicionales & Modelos interpretables sobre el nivel del indice. & Evalua OLS lineal, logaritmica temporal y log-lineal cuando los datos lo permiten. & Se usan como referencias predictivas, no como inferencia causal si hay tendencia o no estacionariedad \citep{penn_state_stat501,springer_spurious_regressions}. \\
+\addlinespace
+Walk-forward & Validacion fuera de muestra que respeta pasado-futuro. & En cada origen se entrena con datos anteriores y se predice un horizonte especifico. & Simula el uso real de pronostico y evita fuga de informacion \citep{tashman2000}. \\
+\addlinespace
+Metricas de error & Cuantifican magnitud, penalizacion y escala del error. & Calcula MAE, RMSE, MAPE, sMAPE, MASE, sesgo y comparaciones relativas por horizonte. & Ninguna metrica decide sola; se leen conjuntamente \citep{hyndman_koehler2006}. \\
+\addlinespace
+Intervalo del 95\,\% & Comunica incertidumbre alrededor del pronostico puntual; es la unica banda publicada. & Usa errores fuera de muestra por horizonte, con metodo empirico centrado por defecto si hay suficientes errores. & Bandas amplias indican incertidumbre; no deben ocultarse ni reducirse artificialmente \citep{hyndman2021fpp3}. \\
+\addlinespace
+Horizonte dinamico & Determina hasta donde la proyeccion es defendible. & Evalua mensualmente errores, intervalos, sesgo, estabilidad, errores extremos y numero de ventanas. & Es un criterio operativo interno sustentado en evaluación fuera de muestra; la solicitud del usuario no fija el máximo recomendado \citep{tashman2000}. \\
+\addlinespace
+\multicolumn{4}{p{0.92\linewidth}}{\footnotesize\textit{Fuente: Elaboración propia con base en \citet{tashman2000}, \citet{hyndman2021fpp3}, \citet{hyndman_koehler2006} e \citet{nist_outliers}.}}\\
+\bottomrule
+\end{longtable}
+\par\normalsize
+
+\section{Fundamentos de series temporales}
+
+Una serie temporal es una sucesion de observaciones ordenadas en el tiempo. En el caso de la app, cada observacion corresponde a un mes. Si se denota por \(y_t\) el valor del indice en el mes \(t\), entonces:
+
+\[
+y_t = \text{valor del indice ICOCIV en el mes } t.
+\]
+
+Esta notacion corresponde a la representacion estandar de una serie temporal, donde el subindice ordena observaciones cronologicas \citep{hyndman2021fpp3}. El subindice \(t\) no es un identificador arbitrario: representa el orden cronologico de los meses. Si la serie inicia en enero de 2021, entonces \(t=1\) puede corresponder a 2021-01, \(t=2\) a 2021-02 y asi sucesivamente. Esta representacion facilita los calculos, pero los graficos e informes deben mostrar fechas reales, no contadores internos.
+
+Una serie mensual puede contener varios componentes:
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Tendencia}: movimiento persistente de largo plazo, por ejemplo crecimiento sostenido del indice.
+    \item \textbf{Cambios escalonados}: saltos asociados a ajustes fuertes de costos o actualizaciones del mercado.
+    \item \textbf{Ruido}: fluctuaciones de corto plazo que no necesariamente siguen un patron estable.
+    \item \textbf{Dependencia temporal}: relacion entre un valor y los valores anteriores.
+    \item \textbf{Estacionalidad}: repeticion sistematica en ciertos meses, si existe evidencia suficiente.
+\end{itemize}
+
+La dependencia temporal es el punto que diferencia una serie del \ICOCIV{} de una tabla de observaciones independientes. En una base de datos transversal se podria mezclar aleatoriamente la informacion para entrenar y evaluar un modelo. En series temporales esto no es correcto, porque una particion aleatoria podria permitir que informacion futura entre al entrenamiento de un pronostico pasado. Esa fuga de informacion produce evaluaciones artificialmente optimistas. Por ello, la validacion debe respetar la direccion pasado-futuro \citep{tashman2000,hyndman2021fpp3}.
+
+\input{tablas/ejemplo_serie_vias_urbanas.tex}
+
+\section{Preparación y validación de datos}
+
+Antes de ajustar cualquier modelo, la app debe comprobar que la serie es temporalmente coherente. Una serie mensual del \ICOCIV{} debe tener periodos validos, orden cronologico, frecuencia mensual y valores numericos del indice. La validacion no es un detalle operativo: es una condicion metodologica para que el pronostico tenga sentido.
+
+\subsection{Continuidad temporal}
+
+La continuidad temporal significa que entre dos observaciones consecutivas de una serie mensual debe existir exactamente un mes de diferencia. Si se observa 2024-01 y luego 2024-03, falta 2024-02. Ese salto no puede ignorarse, porque un modelo podria interpretar el cambio acumulado de dos meses como si fuera una variacion mensual.
+
+\subsection{Duplicados}
+
+Un periodo duplicado indica que existen dos valores asociados al mismo mes. Esto genera ambiguedad: el modelo no sabe cual valor representa el estado oficial de la serie. La app debe advertir o bloquear el analisis si el duplicado no se resuelve.
+
+\subsection{Valores faltantes y no numericos}
+
+Los valores faltantes rompen la continuidad informativa. Los valores no numericos impiden calcular variaciones, errores, residuos o intervalos. En una aplicacion institucional, estos casos deben producir mensajes claros: descripcion tecnica, impacto sobre el modelado, impacto sobre la proyeccion y recomendacion.
+
+\subsection{Longitud minima}
+
+Una serie corta puede ser descriptiva, pero no necesariamente proyectable. Para evaluar un pronostico fuera de muestra se requiere una cantidad suficiente de observaciones historicas. Una regla practica es advertir cuando hay menos de 18 observaciones y recomendar al menos 24 para modelacion basica. La longitud minima no garantiza calidad predictiva, pero sin longitud suficiente el backtesting se vuelve poco defendible. Este criterio es coherente con la recomendacion general de contar con al menos dos ciclos completos de datos antes de modelar series economicas mensuales \citep{hyndman2021fpp3}, y con la practica habitual de reservar al menos una ventana de validacion por horizonte para que el backtesting sea estadisticamente informativo \citep{tashman2000}.
+
+\input{tablas/ejemplo_validacion_vias_urbanas.tex}
+
+\section{Estadística descriptiva aplicada a la serie ICOCIV}
+
+La estadistica descriptiva resume la informacion basica de la serie antes de modelarla. No predice por si misma, pero ayuda a entender el nivel, la dispersion y la trayectoria historica. Las medidas reportadas en esta seccion corresponden a resumenes estadisticos estandar usados en analisis exploratorio de datos \citep{nist_eda_summary}.
+
+La media se define como:
+
+\[
+\bar{y} = \frac{1}{n}\sum_{t=1}^{n} y_t.
+\]
+
+La media \(\bar{y}\) es el promedio de los valores observados. En una serie creciente del \ICOCIV{}, la media suele quedar entre el valor inicial y el valor final, pero no debe interpretarse como un nivel actual.
+
+La desviacion estandar muestral se calcula como:
+
+\[
+s = \sqrt{\frac{1}{n-1}\sum_{t=1}^{n}(y_t-\bar{y})^2}.
+\]
+
+Esta medida resume la dispersion de la serie alrededor de su media. En indices con tendencia, una desviacion alta puede deberse tanto a volatilidad como al crecimiento sostenido del nivel. Por eso conviene complementarla con graficos y variaciones mensuales.
+
+El coeficiente de variacion es:
+
+\[
+CV = \frac{s}{\bar{y}}.
+\]
+
+El \(CV\) expresa la dispersion relativa respecto al promedio. En indices de costos, ayuda a comparar series con niveles distintos, aunque debe interpretarse con cautela cuando existe tendencia fuerte.
+
+Ademas, el informe debe registrar el numero de observaciones, minimo, maximo, primer periodo, ultimo periodo, valor inicial y valor final. Estos elementos permiten verificar que el analisis corresponde exactamente a la serie seleccionada.
+
+\input{tablas/ejemplo_descriptivos_vias_urbanas.tex}
+
+\section{Variación mensual, variación acumulada y comportamiento del índice}
+
+El nivel del indice indica la posicion de la serie en un periodo. La variacion mensual indica el cambio relativo frente al mes anterior; se usa como razon porcentual estandar para interpretar cambios entre periodos consecutivos y es coherente con la lectura de variaciones en indices de precios y costos \citep{dane2021metodologia}:
+
+\[
+\Delta_t = \frac{y_t-y_{t-1}}{y_{t-1}}\times 100.
+\]
+
+Si \(\Delta_t>0\), el indice aumento frente al mes anterior; si \(\Delta_t<0\), disminuyo. En una serie de costos, la variacion mensual permite detectar aceleraciones, cambios bruscos o meses excepcionalmente estables.
+
+Para una proyeccion a \(h\) meses, si el ultimo valor observado es \(y_T\) y el valor proyectado es \(\yhat_{T+h}\), el factor de actualizacion se define operativamente como la razon entre el escenario futuro y el ultimo nivel observado:
+
+\[
+F_h = \frac{\yhat_{T+h}}{y_T}.
+\]
+
+La variacion acumulada proyectada se calcula como:
+
+\[
+VA_h = (F_h-1)\times 100.
+\]
+
+Estas tres cantidades no son equivalentes. El nivel proyectado es el valor futuro del indice; el factor de actualizacion es la razon entre el valor proyectado y el ultimo observado; la variacion acumulada expresa ese cambio en porcentaje. Para obras civiles, el factor de actualizacion puede ser mas operativo que el valor puntual, porque permite traducir el escenario del indice a una proporcion de ajuste.
+
+\input{tablas/ejemplo_variacion_mensual_vias_urbanas.tex}
+\input{tablas/ejemplo_variacion_acumulada_vias_urbanas.tex}
+
+\section{Detección e interpretación de valores atípicos}
+
+Un valor atipico es una observacion que se aleja de forma marcada del comportamiento usual de la serie. En indices de costos puede aparecer por cambios reales de mercado, choques de insumos, ajustes metodologicos, errores de lectura o movimientos excepcionales en un grupo de costo. Por ello, un atipico no debe eliminarse automaticamente.
+
+Una medida robusta usada sobre variaciones o diferencias es el puntaje modificado basado en mediana y desviacion absoluta mediana (MAD) \citep{nist_outliers}:
+
+\[
+M_i = 0.6745\frac{x_i-\tilde{x}}{MAD},
+\]
+
+donde:
+
+\[
+MAD=\operatorname{mediana}(|x_i-\tilde{x}|).
+\]
+
+Aqui \(x_i\) puede representar la variacion mensual, la diferencia simple o la log-variacion, y \(\tilde{x}\) es la mediana de esa variable. El uso de la mediana reduce la influencia de valores extremos. Si \(MAD=0\), el metodo no puede calcularse de manera estable y la app debe emitir una advertencia controlada, no dividir por cero.
+
+La interpretacion recomendada es gradual. Con fines operativos dentro de la aplicacion, el punto de corte \(|M_i|>3.5\) se toma como alerta de posible atipico, siguiendo la recomendacion metodologica de Iglewicz y Hoaglin y la referencia tecnica del NIST para el puntaje Z modificado \citep{nist_outliers}. No se usan subdivisiones fijas en leve, moderado o fuerte como regla universal, porque esos rangos requeririan calibracion empirica especifica de la base analizada. La Tabla \ref{tab:clasificacion_atipicos_modified_z} resume el criterio usado.
+
+\begin{table}[H]
+\centering
+\caption{Criterio robusto de posible valor atipico segun el puntaje Z modificado}
+\label{tab:clasificacion_atipicos_modified_z}
+\begin{tabularx}{\textwidth}{p{3.0cm}p{3.6cm}p{3.1cm}X}
+\toprule
+Rango & Estado & Valor de ejemplo & Interpretacion \\
+\midrule
+\(|M_i|\leq 3.5\) & Sin evidencia robusta de atipicidad & \(2.0000\), ilustrativo & No afecta por si solo el analisis. \\
+\(|M_i|>3.5\) & Posible valor atipico & \(12.9966\), serie real & Requiere revision tecnica; puede ser choque economico real o anomalia de lectura. \\
+\bottomrule
+\end{tabularx}
+\par\footnotesize\textit{Fuente: Elaboración propia con base en \citet{nist_outliers}.}
+\par\footnotesize Nota. El umbral \(|M_i|>3.5\) se basa en la recomendacion de Iglewicz y Hoaglin para identificar posibles valores atipicos mediante el puntaje Z modificado. Si en futuras versiones se desean niveles de severidad adicionales, estos deberan calibrarse empiricamente y registrarse en la matriz de auditoria de criterios.
+\end{table}
+
+Los atipicos deben conservarse en la serie salvo decision metodologica documentada. Eliminarlos sin justificacion puede borrar informacion economica real.
+
+\input{tablas/ejemplo_outliers_vias_urbanas.tex}
+
+\section{Pronóstico en series temporales}
+
+Un modelo de pronostico es una regla estadistica que usa informacion historica para estimar valores futuros. Entrenar un modelo significa estimar sus parametros con datos observados. Predecir significa aplicar esa regla a periodos futuros. El horizonte \(h\) indica cuantos meses adelante se pronostica.
+
+Si la ultima observacion disponible es \(T\), el pronostico a \(h\) meses se escribe como:
+
+\[
+\yhat_{T+h}.
+\]
+
+El error de pronostico, cuando el valor real futuro ya se conoce en una prueba historica, es la diferencia estandar entre observado y pronosticado usada en evaluacion fuera de muestra \citep{tashman2000,hyndman_koehler2006}:
+
+\[
+e_{T+h}=y_{T+h}-\yhat_{T+h}.
+\]
+
+La diferencia entre residuo y error de pronostico es importante. Un residuo se calcula usualmente dentro de la muestra usada para ajustar el modelo. Un error de pronostico fuera de muestra se calcula comparando un pronostico historico con un valor real que no fue usado para entrenar ese pronostico. Para evaluar capacidad predictiva, los errores fuera de muestra son mas informativos que los residuos in-sample \citep{tashman2000}.
+
+\section{Modelos base de referencia}
+
+\subsection{Modelo naive}
+
+El modelo naive supone que el mejor pronostico futuro es el ultimo valor observado; es un benchmark basico de pronostico descrito en la literatura de series temporales \citep{hyndman2021fpp3}:
+
+\[
+\yhat_{T+h}=y_T.
+\]
+
+Es simple, transparente y dificil de superar en series muy persistentes. No se usa porque sea sofisticado, sino porque sirve como benchmark minimo. Si un modelo complejo no mejora al naive en backtesting, su complejidad no esta justificada.
+
+\input{tablas/ejemplo_naive_vias_urbanas.tex}
+
+\subsection{Modelo drift}
+
+El modelo drift extiende hacia el futuro el cambio promedio observado entre el primer y el ultimo dato; se usa como benchmark con tendencia en pronosticos univariados \citep{hyndman2021fpp3}:
+
+\[
+\yhat_{T+h}=y_T+h\cdot\frac{y_T-y_1}{T-1}.
+\]
+
+Donde \(y_1\) es el primer valor observado, \(y_T\) es el ultimo valor observado, \(T\) es el numero de observaciones y \(h\) es el horizonte. La pendiente mensual promedio es:
+
+\[
+\text{pendiente mensual}=\frac{y_T-y_1}{T-1}.
+\]
+
+Drift puede superar regresiones tradicionales cuando la trayectoria historica presenta cambios escalonados o persistentes. Su ventaja es la trazabilidad: cualquier evaluador puede reconstruir la prediccion con el primer valor, el ultimo valor y el numero de observaciones. No se selecciona por ser mas sofisticado, sino cuando su desempeno fuera de muestra es mejor para el horizonte analizado.
+
+\input{tablas/ejemplo_drift_vias_urbanas.tex}
+
+\section{Modelos tradicionales de regresión}
+
+\subsection{Regresion lineal OLS}
+
+La regresion lineal ordinaria sobre el nivel del indice se escribe como una especificacion OLS estandar \citep{penn_state_stat501}:
+
+\[
+\yhat_t=\beta_0+\beta_1 t.
+\]
+
+El parametro \(\beta_0\) es el intercepto y \(\beta_1\) es la pendiente promedio por unidad de tiempo. En una serie mensual, \(\beta_1\) puede interpretarse como el cambio medio del indice por mes bajo el supuesto de tendencia lineal.
+
+La regresion lineal es interpretable y pedagogicamente util. Sin embargo, puede fallar si la serie tiene escalones, cambios recientes fuertes o curvatura. Un buen ajuste visual no basta: el modelo debe compararse con naive, drift y suavizamiento mediante validacion temporal.
+
+Una cautela importante es la estacionariedad. Los indices de costos pueden presentar tendencia persistente o comportamiento no estacionario. En ese contexto, una regresion sobre el nivel del indice puede mostrar buen ajuste visual sin representar una relacion estable; este riesgo se conoce como regresion espuria \citep{springer_spurious_regressions}. Por ello, la app usa las regresiones sobre nivel como referencias predictivas e interpretables, no como modelos causales. Su seleccion depende de desempeno fuera de muestra y no de \(R^2\) aislado.
+
+En este documento, \(\log(x)\) se interpreta como logaritmo natural, \(\ln(x)\). Para evitar ambiguedad, en las formulas de modelos logaritmicos se usa preferiblemente \(\ln(x)\).
+
+\subsection{Regresion logaritmica temporal}
+
+La regresion logaritmica temporal sobre el nivel del indice es una extension interpretable de regresion sobre una transformacion del tiempo \citep{penn_state_stat501}:
+
+\[
+\yhat_t=\beta_0+\beta_1\ln(t+1).
+\]
+
+Esta forma puede capturar trayectorias que crecen rapidamente al inicio y luego se desaceleran. No equivale a modelar la log-variacion mensual. La regresion logaritmica transforma el tiempo; el modelo sobre log-variacion transforma la relacion entre niveles consecutivos.
+
+\subsection{Regresion exponencial o log-lineal}
+
+La regresion exponencial se estima transformando el nivel:
+
+\[
+\ln(y_t)=\beta_0+\beta_1 t+\varepsilon_t,
+\]
+
+con prediccion base en escala logaritmica:
+
+\[
+\widehat{\ln(y_t)}=\hat{\beta}_0+\hat{\beta}_1t.
+\]
+
+Reconstruir directamente como:
+
+\[
+\yhat_t=\exp(\hat{\beta}_0+\hat{\beta}_1 t)
+\]
+
+puede subestimar la esperanza en escala original cuando los errores logaritmicos son aproximadamente log-normales. Por ello, la app debe reportar o aplicar una correccion de retransformacion. Una opcion parametrica es la correccion log-normal:
+
+\[
+\yhat_t=\exp(\hat{\beta}_0+\hat{\beta}_1 t+\hat{\sigma}^2/2),
+\]
+
+donde \(\hat{\sigma}^2\) es la varianza muestral de los residuos en escala logaritmica. Otra opcion, usada por defecto por ser menos dependiente de normalidad estricta, es el estimador smearing de \citet{duan1983}:
+
+\[
+\yhat_t=\exp(\hat{\beta}_0+\hat{\beta}_1 t)\cdot
+\left(\frac{1}{T}\sum_{t=1}^{T}\exp(\hat{\varepsilon}_t)\right).
+\]
+
+Este modelo requiere \(y_t>0\) para todos los periodos y utiliza logaritmo natural. Tiene sentido cuando se supone crecimiento proporcional, pero puede generar extrapolaciones exageradas en horizontes largos. Por eso debe someterse a backtesting y no seleccionarse solo por ajuste dentro de muestra \citep{penn_state_stat501,manning_mullahy2001}.
+
+\subsection{Regresion robusta como apoyo diagnostico}
+
+Cuando existen posibles valores atipicos de gran magnitud, una regresion estimada por minimos cuadrados ordinarios puede quedar muy influenciada por pocos puntos. Los estimadores robustos, como el estimador de Huber, reducen la sensibilidad frente a observaciones extremas \citep{huber1964,penn_state_robust_regression}. SAVIP lo implementa con \texttt{sklearn.linear\_model.HuberRegressor} y los hiperparametros fijos \(\epsilon=1{,}35\), \(\alpha=0{,}0001\) y \texttt{max\_iter}\(=2000\) \citep{sklearn_huberregressor}. En la app, este tipo de modelo no debe sustituir automaticamente al analisis principal: sirve como alternativa condicionada, especialmente si los atipicos afectan la comparacion entre modelos interpretables. Su seleccion final tambien debe depender del backtesting.
+
+\section{Modelos de suavizamiento exponencial}
+
+El suavizamiento exponencial asigna mayor peso a observaciones recientes. En series de costos puede ser util cuando los ultimos meses contienen informacion relevante sobre el nivel y la tendencia actual. El metodo de Holt extiende el suavizamiento simple para representar series con tendencia \citep{holt1957,hyndman2021fpp3}.
+
+Para Holt lineal, se estiman un nivel \(\ell_t\) y una tendencia \(b_t\):
+
+\[
+\ell_t=\alpha y_t+(1-\alpha)(\ell_{t-1}+b_{t-1}),
+\]
+
+\[
+b_t=\beta(\ell_t-\ell_{t-1})+(1-\beta)b_{t-1},
+\]
+
+\[
+\yhat_{t+h}=\ell_t+hb_t.
+\]
+
+Los parametros \(\alpha\) y \(\beta\) controlan la velocidad con la que el modelo actualiza el nivel y la tendencia. No se fijan arbitrariamente cuando existe un optimizador disponible: se estiman mediante optimizacion numerica, usualmente minimizando la suma de errores cuadrados de pronosticos de un paso dentro de la muestra de entrenamiento o una funcion de verosimilitud equivalente \citep{hyndman2021fpp3}. Cada combinacion de parametros produce una secuencia suavizada de niveles y tendencias, genera pronosticos historicos de un paso y esos pronosticos se comparan contra valores reales observados, no contra otra serie suavizada. En validacion walk-forward, el ajuste debe repetirse en cada origen usando solo datos disponibles hasta ese origen.
+
+En Holt amortiguado se introduce un parametro \(\phi\), con \(0<\phi<1\), para reducir gradualmente el efecto de la tendencia:
+
+\[
+\yhat_{t+h}=\ell_t+(\phi+\phi^2+\cdots+\phi^h)b_t.
+\]
+
+La amortiguacion es importante porque muchas series economicas no pueden crecer indefinidamente con la misma pendiente. El trabajo de tendencia amortiguada muestra que reducir gradualmente la tendencia puede mejorar la estabilidad del pronostico frente a extrapolaciones lineales indefinidas \citep{hyndman2021fpp3}. La familia ETS organiza modelos segun error, tendencia y estacionalidad \citep{hyndman2021fpp3}. Es un metodo existente en la literatura y no un modelo implementado en SAVIP: la aplicacion no lo ejecuta ni lo evalua, y la justificacion de esa decision de alcance se documenta en el capitulo de pruebas del documento tecnico.
+
+\input{tablas/ejemplo_holt_lineal_vias_urbanas.tex}
+\input{tablas/ejemplo_holt_amortiguado_vias_urbanas.tex}
+\input{tablas/ejemplo_holt_comparacion_vias_urbanas.tex}
+
+\section{Modelos sobre variación y log-variación}
+
+La app diferencia tres escalas de modelacion:
+
+\[
+\text{Nivel: } y_t,
+\]
+
+\[
+\text{Variacion mensual: } \Delta_t=\frac{y_t-y_{t-1}}{y_{t-1}},
+\]
+
+\[
+\text{Log-variacion: } g_t=\ln(y_t)-\ln(y_{t-1}).
+\]
+
+Modelar el nivel busca pronosticar directamente el indice. Modelar la variacion mensual busca pronosticar el cambio relativo y luego reconstruir el nivel. Modelar la log-variacion usa diferencias logaritmicas, utiles cuando todos los valores son positivos y se desea aproximar crecimiento proporcional.
+
+La distinción metodológica central es:
+
+\begin{quote}
+El modelo sobre log-variacion mensual no equivale a una regresion logaritmica temporal sobre el nivel del indice; ambos responden a supuestos diferentes.
+\end{quote}
+
+\section{Ensambles de modelos}
+
+Un ensamble combina varios pronosticos. La combinacion de pronosticos tiene respaldo en la literatura de forecasting, pero en la app se usa solo como criterio operativo cuando aporta estabilidad frente a modelos individuales \citep{hyndman2021fpp3}:
+
+\[
+\yhat_{ens,h}=\sum_{i=1}^{k}w_{i,h}\yhat_{i,h},
+\]
+
+con pesos por horizonte que satisfacen:
+
+\[
+\sum_{i=1}^{k}w_{i,h}=1.
+\]
+
+Una forma simple de asignar pesos es usar el inverso del error. En la app esta regla se declara como criterio operativo interno, parametrizable y sujeto a validacion por backtesting:
+
+\[
+w_{i,h}=\frac{1/RMSE_{i,h}}{\sum_{j=1}^{k}1/RMSE_{j,h}}.
+\]
+
+El ensamble se justifica cuando varios modelos son competitivos y ninguno domina claramente. No debe usarse para ocultar modelos deficientes. La app debe excluir componentes con errores extremos, sesgo alto, intervalos desproporcionados o desempeno claramente inferior a benchmarks. Ademas, los pesos deben calcularse por horizonte, porque un modelo puede ser competitivo a 3 meses y no serlo a 18 meses.
+
+\section{Validación fuera de muestra}
+
+La validacion in-sample mide que tan bien un modelo explica los datos que ya uso para ajustarse. La validacion out-of-sample mide que tan bien pronostica datos que no fueron usados en el entrenamiento. En pronostico, esta segunda evaluacion es mas cercana al uso real.
+
+\citet{tashman2000} senala que las pruebas fuera de muestra son esenciales para evaluar exactitud predictiva y que las evaluaciones con origen movil pueden mejorar la confiabilidad del diagnostico al usar multiples periodos de prueba. En la app, esta idea se traduce en simular muchas decisiones historicas: entrenar con pasado, pronosticar futuro y comparar contra el valor real cuando ya esta disponible.
+
+\section{Walk-forward validation o rolling-origin evaluation}
+
+La validacion walk-forward, tambien llamada rolling-origin evaluation, respeta la estructura temporal de la serie. El procedimiento es:
+
+\begin{enumerate}[leftmargin=*]
+    \item Se escoge un origen inicial de pronostico.
+    \item Se entrena el modelo usando solo datos hasta ese origen.
+    \item Se pronostica \(h\) meses adelante.
+    \item Se compara el pronostico contra el valor observado.
+    \item Se calcula el error.
+    \item Se mueve el origen un periodo hacia adelante.
+    \item Se recalibra o reentrena el modelo.
+    \item Se repite el proceso.
+    \item Se obtienen errores por horizonte.
+    \item Se calculan metricas agregadas por horizonte.
+\end{enumerate}
+
+El error para el origen \(r\) y el horizonte \(h\) se escribe como:
+
+\[
+e_{r,h}=y_{r+h}-\yhat_{r+h|r}.
+\]
+
+Donde \(r\) es el origen de pronostico, \(y_{r+h}\) es el valor observado futuro y \(\yhat_{r+h|r}\) es el pronostico hecho desde el origen \(r\).
+
+El conjunto de origenes validos para un horizonte \(h\) se define como:
+
+\[
+\mathcal{R}_h=\{r: r\geq r_{\min},\ r+h\leq T\},
+\]
+
+y el numero de ventanas disponibles para evaluar ese horizonte es:
+
+\[
+J_h=|\mathcal{R}_h|.
+\]
+
+En cada origen de validacion se utiliza unicamente informacion disponible hasta ese punto temporal. En una evaluacion fixed-origin se usa un solo origen. En rolling-origin se usan varios origenes, lo cual produce mas errores y permite analizar estabilidad. La Tabla \ref{tab:ejemplo_walkforward_vias_urbanas} muestra valores reales de entrenamiento, pronostico, observacion y error. La recalibracion en cada origen simula la forma en que el modelo se actualizaria al recibir nuevos datos \citep{tashman2000,hyndman2021fpp3}.
+
+\input{tablas/ejemplo_walkforward_vias_urbanas.tex}
+
+\section{Métricas de error predictivo}
+
+Sea \(\mathcal{R}_h\) el conjunto de origenes validos para el horizonte \(h\), y sea \(J_h\) el numero de errores disponibles para ese horizonte. Las metricas se calculan por horizonte para evitar mezclar errores de distinta distancia predictiva. MAE, RMSE, MAPE, sMAPE y MASE son medidas habituales de exactitud predictiva y deben interpretarse segun sus ventajas y limitaciones \citep{hyndman_koehler2006,hyndman2021fpp3}.
+
+El error absoluto medio por horizonte es:
+
+\[
+MAE_h =
+\frac{1}{J_h}
+\sum_{r\in\mathcal{R}_h}|e_{r,h}|.
+\]
+
+El \MAE{} mide el error promedio en unidades del indice. Es facil de interpretar, pero no penaliza de forma especial errores grandes.
+
+El error cuadratico medio raiz es:
+
+\[
+RMSE_h =
+\sqrt{
+\frac{1}{J_h}
+\sum_{r\in\mathcal{R}_h}e_{r,h}^2
+}.
+\]
+
+El \RMS{} penaliza errores grandes porque eleva al cuadrado cada error. Es util cuando los errores extremos son especialmente indeseables.
+
+El error porcentual absoluto medio es:
+
+\[
+MAPE_h =
+\frac{100}{J_h}
+\sum_{r\in\mathcal{R}_h}
+\left|
+\frac{e_{r,h}}{y_{r+h}}
+\right|.
+\]
+
+El \MAPE{} expresa el error en porcentaje del valor observado, pero puede ser problematico si \(y_i\) es cercano a cero. En el \ICOCIV{}, los indices suelen ser positivos y suficientemente alejados de cero, por lo que puede ser informativo.
+
+El sMAPE se define como:
+
+\[
+sMAPE_h =
+\frac{100}{J_h}
+\sum_{r\in\mathcal{R}_h}
+\frac{
+|y_{r+h}-\yhat_{r+h|r}|
+}{
+(|y_{r+h}|+|\yhat_{r+h|r}|)/2
+}.
+\]
+
+El \SMAPE{} busca una escala porcentual mas simetrica entre observado y pronosticado.
+
+El MASE compara el \MAE{} del modelo contra una escala naive in-sample:
+
+\[
+MASE=\frac{MAE_{modelo}}{MAE_{naive\ insample}}.
+\]
+
+Para una serie no estacional, la escala naive dentro de muestra se calcula como:
+
+\[
+MAE_{naive,in\text{-}sample}
+=
+\frac{1}{T-1}
+\sum_{t=2}^{T}|y_t-y_{t-1}|.
+\]
+
+En una validacion walk-forward no debe calcularse esa escala con toda la serie, porque eso incorporaria informacion futura. En cada origen \(r\), la escala se obtiene solo con la ventana de entrenamiento disponible:
+
+\[
+d_r=
+\frac{1}{r-1}
+\sum_{t=2}^{r}|y_t-y_{t-1}|.
+\]
+
+El error escalado del pronostico es:
+
+\[
+q_{r,h}=\frac{|e_{r,h}|}{d_r},
+\]
+
+y el MASE por horizonte se resume como:
+
+\[
+MASE_h=
+\frac{1}{J_h}
+\sum_{r \in \mathcal{R}_h}q_{r,h}.
+\]
+
+\citet{hyndman_koehler2006} proponen el MASE como una medida escalada util para comparar exactitud. \(MASE<1\) indica error menor que la escala naive in-sample; \(MASE=1\) indica error similar; \(MASE>1\) indica error mayor frente a esa escala. En la app, MASE es una metrica auxiliar, no un veto unico. Puede ocurrir que \(MASE>1\) por la escala naive in-sample, pero que el modelo seleccionado supere a naive o drift en backtesting por horizonte. En pronosticos multihorizonte, MASE puede ser mayor que 1 aunque el modelo mejore otras metricas especificas del horizonte. Por ello se interpreta junto con MAE, RMSE, MAPE, sMAPE, rMAE/rRMSE, sesgo e intervalos.
+
+\input{tablas/ejemplo_metricas_vias_urbanas.tex}
+\input{tablas/ejemplo_mase_vias_urbanas.tex}
+
+\section{Diagnóstico residual}
+
+Los residuos son diferencias entre valores observados y ajustados dentro de la muestra. Se usan para diagnosticar si el modelo deja patrones sin capturar. No son lo mismo que errores de backtesting, pero ayudan a entender debilidades.
+
+Un diagnostico residual revisa:
+
+\begin{itemize}[leftmargin=*]
+    \item media residual cercana a cero;
+    \item autocorrelacion residual;
+    \item heterocedasticidad;
+    \item normalidad aproximada;
+    \item errores extremos.
+\end{itemize}
+
+El estadistico Durbin-Watson aporta evidencia sobre autocorrelacion serial de primer orden en residuos de regresion \citep{statsmodels_durbin_watson}:
+
+\[
+DW=
+\frac{\sum_{t=2}^{T}(e_t-e_{t-1})^2}
+{\sum_{t=1}^{T}e_t^2}.
+\]
+
+Su rango aproximado es \([0,4]\). Un valor cercano a 2 sugiere ausencia de evidencia fuerte de autocorrelacion de primer orden; valores bajos, cercanos a 0, sugieren autocorrelacion positiva; valores altos, cercanos a 4, sugieren autocorrelacion negativa. Esta interpretacion es aproximada. El test esta definido principalmente para residuos de modelos de regresion lineal estimados por minimos cuadrados ordinarios, con regiones de inconclusion que dependen del tamano muestral y del numero de regresores. En modelos de suavizamiento u otros metodos no estimados por minimos cuadrados, la app lo reporta solo como diagnostico descriptivo y no como prueba formal concluyente.
+
+La prueba Ljung-Box evalua si varias autocorrelaciones residuales son conjuntamente significativas \citep{statsmodels_ljungbox}. Es util cuando se quiere revisar si quedan patrones temporales despues del ajuste.
+
+La prueba Jarque-Bera evalua normalidad aproximada mediante asimetria y curtosis \citep{statsmodels_jarque_bera}. En series economicas reales, fallar normalidad no invalida automaticamente un pronostico; simplemente advierte que los intervalos y diagnosticos deben interpretarse con cautela.
+
+\section{Intervalos de predicción}
+
+Un pronostico puntual \(\yhat_{T+h}\) no expresa toda la incertidumbre. Un intervalo de prediccion proporciona un rango plausible. Un nivel del 80\,\% produce una banda central mas estrecha y uno del 95\,\% una banda mas conservadora y por tanto mas amplia. SAVIP publica un unico nivel al usuario, el del 95\,\%; la banda del 80\,\% se calcula solo como diagnostico interno para forzar la envolvente de semiancho no decreciente y no aparece en la interfaz, el CSV, el DOCX, el PDF ni el HTML.
+
+Una forma normal simetrica por horizonte usa errores out-of-sample; esta aproximacion corresponde a una construccion estandar de intervalos basada en desviacion de errores y cuantiles normales, aunque debe verificarse su adecuacion empirica \citep{hyndman2021fpp3}:
+
+\[
+e_{r,h}=y_{r+h}-\yhat_{r+h|r}.
+\]
+
+Si \(\sigma_h\) es la desviacion estandar muestral de esos errores, entonces:
+
+\[
+IC_{80,h}=\yhat_{T+h}\pm 1.2816\sigma_h,
+\]
+
+\[
+IC_{95,h}=\yhat_{T+h}\pm 1.96\sigma_h.
+\]
+
+La app tambien puede usar un intervalo empirico centrado. Primero centra los errores:
+
+\[
+e^c_{r,h}=e_{r,h}-\bar{e}_h.
+\]
+
+Luego usa percentiles 10 y 90 para la banda interna del 80\,\%, y percentiles 2.5 y 97.5 para la banda del 95\,\% que se publica. Este metodo es el preferido cuando hay suficientes errores fuera de muestra por horizonte, porque evita bandas artificialmente unilaterales si los errores historicos tienen sesgo, practica documentada en la evaluacion de incertidumbre predictiva por horizonte \citep{hyndman2021fpp3}.
+
+Un tercer metodo es el intervalo empirico asimetrico, que usa percentiles directos de \(e_{r,h}\) sin centrar. Puede ser util si se desea conservar el sesgo historico de los errores, pero debe explicarse si produce bandas muy asimetricas.
+
+En todos los casos, la preferencia metodologica es construir intervalos a partir de errores out-of-sample por horizonte. No se deben mezclar errores de \(h=1\) con errores de \(h=12\), porque la incertidumbre normalmente crece con el horizonte. Si hay pocos errores fuera de muestra para un horizonte largo, el intervalo pierde confiabilidad y la app debe advertirlo o restringir el horizonte.
+
+Intervalos amplios no son una falla visual. Son informacion estadistica: indican que la serie o el modelo no permiten afirmar un valor futuro estrecho.
+
+\input{tablas/ejemplo_intervalos_vias_urbanas.tex}
+
+\section{Selección de modelo por horizonte}
+
+No siempre el mejor modelo para \(h=1\) es el mejor para \(h=12\). Por eso la app evalua modelos por horizonte. La seleccion considera:
+
+\begin{itemize}[leftmargin=*]
+    \item RMSE, MAE, MAPE y sMAPE por horizonte;
+    \item sesgo medio;
+    \item estabilidad de errores;
+    \item ancho relativo del IC95;
+    \item errores extremos;
+    \item comparacion contra naive y drift;
+    \item simplicidad y reproducibilidad.
+\end{itemize}
+
+Un modelo mas complejo no se selecciona si no mejora el desempeno fuera de muestra. La seleccion no premia sofisticacion, sino evidencia predictiva. Si drift supera a una regresion lineal en RMSE y MAE para el horizonte solicitado, drift puede ser la opcion metodologicamente mas defendible. La tolerancia de comparacion contra benchmarks sigue la practica de evaluacion relativa descrita en \citet{hyndman_koehler2006}: un modelo es aceptable si su error no supera sustancialmente al del benchmark de referencia. El umbral operativo concreto es una regla interna de la aplicacion y debe declararse en el informe cuando afecte la decision de seleccion.
+
+La app distingue entre \emph{modelo ganador por horizonte} y \emph{modelo final aplicado a la trayectoria}. El primero es el metodo con mejor evidencia para un horizonte especifico; el segundo es el modelo usado para construir la curva final mostrada al usuario. Si ambos difieren, el informe debe declararlo, bajar la confianza y reportar las metricas del modelo final cuando esten disponibles. No es metodologicamente valido usar las metricas del ganador de \(h=1\) para justificar una trayectoria final construida con otro modelo hasta \(h=12\).
+
+Cuando se comparan modelos parametricos estimados sobre la misma muestra, pueden reportarse criterios de informacion como AIC y AICc. AIC penaliza la falta de ajuste y la complejidad del modelo \citep{hyndman2021fpp3}; AICc agrega una correccion para muestras pequenas \citep{hyndman_khandakar2008}. Sin embargo, en la aplicacion estos criterios no reemplazan el backtesting: se usan como evidencia complementaria cuando los modelos son comparables. Un benchmark como promedio movil o naive no debe tratarse como si tuviera una verosimilitud paramétrica equivalente si tal supuesto no fue definido.
+
+\input{tablas/ejemplo_benchmarks_vias_urbanas.tex}
+\input{tablas/ejemplo_seleccion_modelo_vias_urbanas.tex}
+
+\section{Determinación dinámica del horizonte máximo}
+
+Esta seccion es central. El usuario puede emplear un valor predeterminado o escribir un horizonte manual dentro del rango operativo. Ese valor indica qué desea analizar, pero no modifica la evidencia histórica ni garantiza que la proyección sea admisible. Internamente, el sistema evalúa una grilla mensual continua \(h=1,2,3,\ldots,H\), hasta donde existan ventanas fuera de muestra suficientes. Por ello, el máximo recomendado debe permanecer estable para la misma ruta, datos y configuración, aunque se consulte primero \(h=12\) y después \(h=30\).
+
+La aplicacion distingue los siguientes conceptos operativos:
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Horizonte solicitado}: meses pedidos por el usuario; es una solicitud de análisis.
+    \item \textbf{Horizonte máximo recomendado}: último horizonte numéricamente consecutivo desde \(h=1\) clasificado como proyección técnica admisible.
+    \item \textbf{Horizonte máximo permitido como escenario}: último horizonte consecutivo clasificado explícitamente como escenario de alta incertidumbre antes de un corte.
+    \item \textbf{Horizonte máximo evaluado}: último \(h\) para el cual fue posible ejecutar la evaluación; no equivale automáticamente a una recomendación.
+    \item \textbf{Límite operativo}: máximo configurado para evitar una búsqueda indefinida; tampoco equivale a una recomendación.
+    \item \textbf{Primer horizonte no viable}: primer \(h\) evaluado y clasificado como no admisible.
+    \item \textbf{Horizontes no recomendables}: horizontes evaluados pero rechazados por error, sesgo, inestabilidad, escasez de ventanas o intervalos excesivos.
+    \item \textbf{Horizontes no evaluados}: horizontes por encima de la grilla validada; no se asumen defendibles sin backtesting especifico.
+\end{itemize}
+
+El ancho relativo del IC95 es un indicador operativo interno de comunicacion de incertidumbre relativa:
+
+\[
+AnchoRelativoIC95_h=
+\frac{IC95_{sup,h}-IC95_{inf,h}}{|\yhat_{T+h}|}.
+\]
+
+El horizonte maximo depende de criterios operativos internos basados en errores por horizonte, numero de iteraciones validas, sesgo, estabilidad, errores extremos, comparacion con benchmarks y coherencia de la trayectoria. Estos criterios se derivan de la logica de evaluacion fuera de muestra por horizonte \citep{tashman2000} y del principio de que la incertidumbre predictiva suele crecer con el horizonte \citep{hyndman2021fpp3}. Los umbrales concretos son reglas internas documentadas, no parametros universales. El máximo recomendado se obtiene únicamente del tramo técnico consecutivo; el máximo como escenario se obtiene del tramo clasificado como escenario; ninguno se rellena con el último horizonte evaluado.
+
+Cuando no se identifica ningún horizonte no viable dentro de la grilla, el informe debe indicar la razón de parada. Si la evaluación terminó por falta de evidencia, el máximo evaluado solo representa el borde de la auditoría. No demuestra validez para horizontes superiores ni reemplaza la clasificación técnica o de escenario.
+
+\input{tablas/ejemplo_resumen_horizontes_vias_urbanas.tex}
+\input{tablas/ejemplo_horizonte_maximo_vias_urbanas.tex}
+
+\section{Reproducibilidad de las proyecciones}
+
+Un informe defendible debe permitir reconstruir la grafica en Excel, Python, R u otra herramienta. Para ello debe reportar:
+
+\begin{itemize}[leftmargin=*]
+    \item modelo seleccionado;
+    \item ecuacion;
+    \item parametros;
+    \item periodo inicial y final;
+    \item numero de observaciones;
+    \item definicion de \(t\);
+    \item horizonte \(h\);
+    \item valores proyectados;
+    \item intervalo de prediccion del 95\,\%;
+    \item factor de actualizacion;
+    \item variacion acumulada.
+\end{itemize}
+
+Ejemplos de formulas reproducibles, retomadas de las secciones de modelos previamente sustentadas con referencias bibliograficas:
+
+\[
+\text{Naive: }\yhat_{T+h}=y_T.
+\]
+
+\[
+\text{Drift: }\yhat_{T+h}=y_T+h\cdot\frac{y_T-y_1}{T-1}.
+\]
+
+\[
+\text{Lineal: }\yhat_t=\beta_0+\beta_1 t.
+\]
+
+\[
+\text{Logaritmico temporal: }\yhat_t=\beta_0+\beta_1\ln(t+1).
+\]
+
+\[
+\text{Exponencial corregido: }\yhat_t=\exp(\beta_0+\beta_1t)\cdot \text{smearing factor}.
+\]
+
+\[
+\text{Ensamble: }\yhat_{ens,h}=\sum_i w_{i,h}\yhat_{i,h}.
+\]
+
+Estas expresiones no reemplazan la validacion temporal: son la receta algebraica que permite reconstruir la trayectoria una vez seleccionado el modelo mediante backtesting y criterios por horizonte \citep{tashman2000,hyndman2021fpp3}.
+
+\input{tablas/ejemplo_reproducibilidad_vias_urbanas.tex}
+
+\section{Síntesis del ejemplo aplicado con la serie real}
+
+Los ejemplos distribuidos en las secciones anteriores se calcularon con la serie real localizada en el anexo \texttt{anex-ICOCIV-ene2026.xlsb}. La trazabilidad queda documentada en las Tablas \ref{tab:ejemplo_ruta_vias_urbanas} y \ref{tab:ejemplo_serie_vias_urbanas}: tabla de origen \(T\_16\_2\), grupo de obra con código 530201, subclase CPC 53211 y tipología 53211\_07. La serie contiene 61 observaciones mensuales, desde 2021-01 hasta 2026-01. Por tanto, las tablas de validación, descriptivos, variaciones, atípicos, modelos, backtesting, intervalos y horizonte máximo corresponden a datos reales de la ruta jerárquica solicitada.
+
+La evidencia aplicada se organiza en tablas referenciables: validacion de datos (Tabla \ref{tab:ejemplo_validacion_vias_urbanas}), descriptivos (Tabla \ref{tab:ejemplo_descriptivos_vias_urbanas}), variacion mensual y acumulada (Tablas \ref{tab:ejemplo_variacion_mensual_vias_urbanas} y \ref{tab:ejemplo_variacion_acumulada_vias_urbanas}), deteccion de atipicos (Tabla \ref{tab:ejemplo_outliers_vias_urbanas}), pronosticos Naive y Drift (Tablas \ref{tab:ejemplo_naive_vias_urbanas} y \ref{tab:ejemplo_drift_vias_urbanas}), trazabilidad Holt (Tablas \ref{tab:ejemplo_holt_lineal_vias_urbanas}, \ref{tab:ejemplo_holt_amortiguado_vias_urbanas} y \ref{tab:ejemplo_holt_comparacion_vias_urbanas}), walk-forward (Tabla \ref{tab:ejemplo_walkforward_vias_urbanas}), metricas y MASE (Tablas \ref{tab:ejemplo_metricas_vias_urbanas} y \ref{tab:ejemplo_mase_vias_urbanas}), benchmarks y seleccion (Tablas \ref{tab:ejemplo_benchmarks_vias_urbanas} y \ref{tab:ejemplo_seleccion_modelo_vias_urbanas}), intervalos y horizontes (Tablas \ref{tab:ejemplo_intervalos_vias_urbanas}, \ref{tab:ejemplo_resumen_horizontes_vias_urbanas} y \ref{tab:ejemplo_horizonte_maximo_vias_urbanas}) y reproducibilidad exportable (Tabla \ref{tab:ejemplo_reproducibilidad_vias_urbanas}).
+
+En esta ejecución real se solicitaron 18 meses. La clasificación técnica consecutiva alcanzó \(h=12\), el tramo de escenario llegó a \(h=20\) y el máximo evaluado también fue \(h=20\). La coincidencia de estos dos últimos valores no los convierte en el mismo concepto: uno procede de la clasificación explícita de escenario y el otro de la disponibilidad de ventanas fuera de muestra.
+
+La sección no presenta una serie sustituta. Su función es consolidar que todos los cálculos de ejemplo provienen de la misma ruta y que los valores se generan de forma reproducible mediante el script \texttt{scripts/build\_overleaf\_examples.py}. Dicho script extrae la serie con el cargador oficial del backend, ordena los periodos cronológicamente, ejecuta las validaciones y produce los fragmentos LaTeX incluidos en este documento.
+
+\section{Presentación en la interfaz e informes ICOCIV}
+
+La aplicación presenta los resultados en dos niveles. El \textbf{resultado principal} responde al horizonte solicitado: informa si se generó la proyección, el periodo objetivo, el índice, el modelo, los intervalos y la razón de la decisión. El \textbf{análisis técnico completo} conserva la grilla mensual, las métricas, la clasificación, el máximo recomendado, el máximo como escenario, el máximo evaluado, el límite operativo y la razón de parada.
+
+Esta separación evita mostrar un resultado de otro horizonte como si respondiera a la solicitud y mantiene coherencia con la evaluación fuera de muestra por origen móvil \citep{tashman2000}. En los informes, el resumen ejecutivo presenta primero la solicitud y su decisión; las tablas y anexos desarrollan el análisis completo. Algunas situaciones frecuentes son:
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Drift gana a Lineal OLS}: se explica que la regresion lineal fue evaluada como referencia interpretable, pero no seleccionada si su error fuera de muestra fue mayor.
+    \item \textbf{Ensamble seleccionado}: se informa que ningun modelo domina claramente, se listan componentes, pesos y razones de inclusion.
+    \item \textbf{\(h=12\) viable y \(h=18\) no recomendable}: el resumen global debe depender del horizonte solicitado. Una advertencia de \(h=18\) no debe aparecer como bloqueo global de \(h=12\).
+    \item \textbf{MASE mayor que 1}: se reporta como advertencia auxiliar y se contrasta con rRMSE y rMAE frente a naive y drift.
+    \item \textbf{IC95 relativo alto}: reduce la recomendacion del horizonte y puede clasificarlo como escenario de alta incertidumbre.
+\end{itemize}
+
+La app debe evitar contradicciones. Si se permite una proyeccion a 12 meses, el informe no debe decir en el resumen que no se permite proyeccion. Si un horizonte especifico no se recomienda, debe mencionarse el horizonte exacto. Si la solicitud no es admisible, no se reutiliza silenciosamente una proyección más corta.
+
+\section{Trazabilidad bibliográfica y fuentes utilizadas}
+
+Las citas de este documento se administran con BibTeX y estilo autor--año mediante \texttt{apacite}. El archivo \texttt{referencias.bib} contiene las referencias citadas por el documento principal; cada clave fue contrastada con una fuente revisable disponible en \texttt{referencias\_bibliograficas/usadas\_en\_documento\_latex}. Las fuentes incluyen documentos institucionales, textos abiertos, documentación oficial, artículos con DOI o versiones de autor accesibles.
+
+La correspondencia entre afirmaciones, claves, URL, DOI y archivos locales se registra en \texttt{referencias\_bibliograficas/auditoria\_referencias\_latex\_actualizada.md}. Las fuentes cuya única evidencia fuera una página de compra, un catálogo, un resultado de búsqueda o una ficha sin contenido no se usan como respaldo principal. Cuando el texto completo no es abierto, se conserva únicamente el metadato verificable y se usa una fuente alternativa revisable para la afirmación concreta.
+
+No se realizó una carga directa a Mendeley porque el entorno de ejecución no dispone de acceso autorizado a una cuenta. En su lugar, se prepararon un BibTeX limpio, un archivo RIS, una lista de fuentes y las instrucciones para crear la colección \textit{ICOCIV - Documento metodológico actualizado}.
+
+\section{Limitaciones metodológicas}
+
+La proyeccion estadistica no es certeza. Sus limitaciones principales son:
+
+\begin{itemize}[leftmargin=*]
+    \item depende de la calidad y longitud de la serie historica;
+    \item puede verse afectada por cambios estructurales no presentes en el pasado;
+    \item los modelos univariados no incorporan informacion externa como tipo de cambio, combustibles o politicas publicas;
+    \item horizontes largos tienen mayor incertidumbre;
+    \item valores atipicos pueden representar choques reales o errores de lectura;
+    \item los intervalos dependen de la cantidad de errores historicos disponibles por horizonte.
+\end{itemize}
+
+Estas limitaciones no invalidan el analisis. Lo delimitan. En ingenieria civil, una proyeccion de indices debe usarse como escenario tecnico, no como garantia contractual automatica. Esta cautela es consistente con la literatura de pronostico, que distingue entre pronostico puntual, incertidumbre y condiciones de uso del modelo \citep{hyndman2021fpp3}.
+
+\section{Criterios de defensa metodológica}
+
+La defensa metodológica del sistema se fundamenta en trazabilidad, validación fuera de muestra e interpretación por horizonte. Las regresiones tradicionales se evalúan como referencias interpretables, pero no se seleccionan automáticamente si su desempeño fuera de muestra es inferior al de Drift, Holt u otro modelo validado. La selección se basa en evidencia predictiva, no en preferencia por modelos más complejos ni en ajuste visual dentro de muestra \citep{tashman2000,hyndman_koehler2006}.
+
+La validación walk-forward se adopta porque respeta el orden pasado-futuro de las series temporales. Cada pronóstico se construye con información disponible hasta el origen de predicción y se compara con un valor futuro no usado en el entrenamiento. Este diseño reduce la fuga de información y aproxima el uso operativo de la aplicación \citep{tashman2000,hyndman2021fpp3}.
+
+Los valores predeterminados de la interfaz son atajos de solicitud, no límites estadísticos. El máximo recomendado depende de la clasificación técnica consecutiva sustentada en errores por horizonte, intervalos, sesgo, estabilidad, comparación contra benchmarks y cantidad de ventanas válidas. El máximo evaluado y el límite operativo se reportan por separado. Esta regla pertenece a la política interna documentada en la Tabla \ref{tab:matriz_criterios_metodologicos}.
+
+Los modelos simples tienen un papel central porque funcionan como benchmarks y porque, en series moderadas, pueden ofrecer mayor estabilidad y trazabilidad. Un modelo avanzado solo queda justificado si aporta mejora fuera de muestra frente a Naive, Drift y Holt. La complejidad se acepta cuando mejora la evidencia predictiva; no se adopta como fin en sí mismo.
+
+Los intervalos amplios se reportan porque representan incertidumbre estadística. Reducir artificialmente las bandas produciría una falsa sensación de precisión. Cuando el IC95 relativo crece, la aplicación debe comunicar que el horizonte pierde fiabilidad o pasa a interpretarse como escenario de alta incertidumbre \citep{hyndman2021fpp3}.
+
+\section{Conclusiones}
+
+El analisis estadistico de la app \ICOCIV{} se fundamenta en una idea central: los indices de costos de obras civiles son series temporales economicas y deben evaluarse como tales. La preparacion de datos garantiza que la serie sea cronologicamente valida. La estadistica descriptiva permite comprender nivel, dispersion y variaciones. Los modelos de pronostico se comparan contra benchmarks simples. La seleccion se basa en errores fuera de muestra, no en complejidad ni en ajuste visual \citep{tashman2000,hyndman2021fpp3}.
+
+La validacion walk-forward aporta rigor porque simula decisiones historicas de pronostico. Las metricas MAE, RMSE, MAPE, sMAPE y MASE permiten leer el error desde perspectivas complementarias. Los residuos ayudan a diagnosticar patrones no capturados, mientras que el intervalo de prediccion del 95\,\% comunica la incertidumbre publicada.
+
+Finalmente, la determinacion dinamica del horizonte maximo evita dos errores: forzar proyecciones debiles y bloquear proyecciones defendibles. El horizonte solicitado se analiza sin alterar arbitrariamente la auditoría completa; el máximo recomendado, el máximo como escenario, el máximo evaluado y el límite operativo conservan significados distintos. Un horizonte se permite cuando existe evidencia suficiente, se presenta como escenario cuando su incertidumbre es alta y se niega cuando no es admisible. Este enfoque hace que la app sea mas trazable, pedagogica y defendible ante evaluacion academica.
+
+\newpage
+\section{Anexo: matriz de criterios metodológicos}
+\label{sec:matriz_criterios_metodologicos}
+
+La Tabla \ref{tab:matriz_criterios_metodologicos} documenta el origen y el uso de los criterios principales aplicados por la app. Su proposito es distinguir reglas bibliograficas, criterios oficiales del DANE, definiciones estadisticas estandar y decisiones operativas internas. Los criterios internos deben permanecer parametrizables y revisarse con evidencia historica adicional; no se presentan como reglas universales de la literatura.
+
+\begingroup
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{longtable}{
+>{\raggedright\arraybackslash}p{0.17\linewidth}
+>{\raggedright\arraybackslash}p{0.13\linewidth}
+>{\raggedright\arraybackslash}p{0.19\linewidth}
+>{\raggedright\arraybackslash}p{0.22\linewidth}
+>{\raggedright\arraybackslash}p{0.13\linewidth}}
+\caption{Matriz de criterios metodologicos, sustento y uso en la aplicacion}
+\label{tab:matriz_criterios_metodologicos}\\
+\toprule
+\textbf{Criterio} & \textbf{Tipo} & \textbf{Valor o regla} & \textbf{Sustento} & \textbf{Uso en la app} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Criterio} & \textbf{Tipo} & \textbf{Valor o regla} & \textbf{Sustento} & \textbf{Uso en la app} \\
+\midrule
+\endhead
+Serie oficial \ICOCIV{} & Metodologico oficial & Usar anexos o series oficiales, sin modificar canasta ni ponderadores. & Metodologia y pagina institucional del DANE \citep{dane2021metodologia,dane_icociv_web}. & Delimita el alcance del software. \\
+\addlinespace
+Continuidad mensual & Estadistico y computacional & Periodos ordenados anio-mes, sin duplicados ni saltos no documentados. & La validacion temporal debe preservar la estructura pasado-futuro \citep{tashman2000,hyndman2021fpp3}. & Habilita analisis descriptivo y backtesting. \\
+\addlinespace
+Longitud minima descriptiva/modelable & Operativo interno & Advertir series muy cortas y exigir ventanas suficientes para backtesting. & Criterio parametrizable basado en necesidad de errores fuera de muestra; no es umbral universal. & Decide si se modela o solo se describe. \\
+\addlinespace
+Media, desviacion y CV & Estadistico estandar & Formulas descriptivas muestrales. & Resumen exploratorio de datos \citep{nist_eda_summary}. & Caracteriza nivel y dispersion de la serie. \\
+\addlinespace
+Variacion mensual & Estadistico estandar y oficial & \(\Delta_t=(y_t-y_{t-1})/y_{t-1}\times100\). & Razon porcentual estandar y lectura de variaciones de indices \citep{dane2021metodologia}. & Mide cambios consecutivos y apoya deteccion de saltos. \\
+\addlinespace
+Modified Z-Score & Bibliografico & \(|M_i|>3.5\) como posible atipico. & Iglewicz y Hoaglin; NIST \citep{nist_outliers}. & Genera advertencia, no elimina datos. \\
+\addlinespace
+Subdivisiones de atipicos & Operativo interno pendiente de calibracion & No se usan cortes leve/moderado/fuerte como escala universal. & Requieren calibracion empirica si se incorporan. & Evita presentar rangos arbitrarios. \\
+\addlinespace
+Naive & Bibliografico & \(\yhat_{T+h}=y_T\). & Benchmark basico de pronostico \citep{hyndman2021fpp3}. & Referencia minima de desempeno. \\
+\addlinespace
+Drift & Bibliografico & \(\yhat_{T+h}=y_T+h(y_T-y_1)/(T-1)\). & Benchmark con tendencia \citep{hyndman2021fpp3}. & Modelo simple y reproducible por horizonte. \\
+\addlinespace
+OLS lineal/logaritmico & Bibliografico & Modelos de regresion sobre nivel o transformacion de tiempo. & Econometria aplicada \citep{penn_state_stat501}. & Referencia interpretable, no causal si hay no estacionariedad. \\
+\addlinespace
+Regresion espuria & Bibliografico & Advertencia si se modelan niveles con tendencia. & Granger y Newbold \citep{springer_spurious_regressions}. & Evita interpretar coeficientes como relaciones estructurales. \\
+\addlinespace
+Log-lineal y smearing & Bibliografico & Correccion smearing o log-normal al volver a escala original. & Duan y Manning-Mullahy \citep{duan1983,manning_mullahy2001}. & Evita sesgo de retransformacion. \\
+\addlinespace
+Holt y Holt amortiguado & Bibliografico & Suavizamiento con nivel, tendencia y, si aplica, amortiguacion. & Holt y Hyndman \citep{holt1957,hyndman2021fpp3}. & Candidato base de series con tendencia. \\
+\addlinespace
+Walk-forward & Bibliografico & Reentrenar en cada origen y predecir \(h\) meses adelante. & Validacion fuera de muestra \citep{tashman2000,hyndman2021fpp3}. & Estima capacidad predictiva real. \\
+\addlinespace
+MAE, RMSE, MAPE, sMAPE & Bibliografico & Metricas por horizonte con errores \(e_{r,h}\). & Medidas de exactitud predictiva \citep{hyndman_koehler2006}. & Comparan modelos y benchmarks. \\
+\addlinespace
+MASE & Bibliografico & Error escalado contra naive in-sample por origen. & Hyndman y Koehler \citep{hyndman_koehler2006}. & Senal auxiliar de cautela, no veto unico. \\
+\addlinespace
+rMAE/rRMSE frente a benchmarks & Operativo interno basado en metrica estandar & Cociente entre error del modelo y error de naive/drift en backtesting. & Comparacion relativa de exactitud \citep{hyndman_koehler2006}. & Decide si el modelo aporta frente al benchmark. \\
+\addlinespace
+Durbin-Watson & Bibliografico & Diagnostico de autocorrelacion de primer orden, formal en OLS. & Durbin y Watson \citep{statsmodels_durbin_watson}. & Advertencia residual; no veto unico. \\
+\addlinespace
+Ljung-Box & Bibliografico & Prueba conjunta de autocorrelaciones residuales. & Ljung y Box \citep{statsmodels_ljungbox}. & Diagnostico cuando hay longitud suficiente. \\
+\addlinespace
+Jarque-Bera & Bibliografico & Normalidad aproximada por asimetria y curtosis. & Jarque y Bera \citep{statsmodels_jarque_bera}. & Advertencia sobre distribucion residual. \\
+\addlinespace
+AIC/AICc & Bibliografico & Comparacion de modelos parametricos comparables. & Akaike; Hurvich y Tsai \citep{hyndman2021fpp3,hyndman_khandakar2008}. & Complemento dentro de familias parametricas. \\
+\addlinespace
+Intervalo normal & Estadistico estandar & Cuantiles normales, 1.2816 al 80\,\% y 1.96 al 95\,\%, con \(\sigma_h\); SAVIP solo publica el nivel del 95\,\%. & Intervalos predictivos y cuantiles normales \citep{hyndman2021fpp3}. & Comunica incertidumbre por horizonte. \\
+\addlinespace
+Intervalo empirico centrado & Operativo interno basado en errores OOS & Percentiles de errores centrados por horizonte. & Practica de incertidumbre con errores fuera de muestra \citep{hyndman2021fpp3}. & Metodo por defecto si hay errores suficientes. \\
+\addlinespace
+Ancho relativo IC95 & Operativo interno & \((IC95_{sup,h}-IC95_{inf,h})/|\yhat_{T+h}|\). & Indicador comunicacional de incertidumbre relativa; debe calibrarse por sensibilidad. & Clasifica cautela del horizonte. \\
+\addlinespace
+Numero minimo \(J_h\) & Operativo interno y computacional & Ventanas minimas por horizonte para considerar evidencia. & Requisito de estabilidad del backtesting; parametrizable. & Evita decisiones con pocos errores. \\
+\addlinespace
+Horizonte maximo recomendado & Operativo interno & Ultimo horizonte con evidencia tecnica razonable. & Derivado de backtesting, intervalos, sesgo y estabilidad \citep{tashman2000}. & Limita la proyeccion principal. \\
+\addlinespace
+Horizonte solicitado & Operativo interno & Valor predeterminado o manual pedido por el usuario. & Decisión de uso; no modifica la evidencia estadística. & Centra el resultado principal. \\
+\addlinespace
+Máximo evaluado & Computacional & Último \(h\) con ventanas fuera de muestra suficientes. & Depende de longitud, entrenamiento inicial y número mínimo de iteraciones. & Delimita la grilla observada; no sustituye la recomendación. \\
+\addlinespace
+Límite operativo & Operativo interno & Máximo configurado de auditoría. & Control de costo computacional; no es un resultado estadístico. & Evita búsquedas indefinidas. \\
+\addlinespace
+Ensamble & Bibliografico y operativo interno & Combinar modelos competitivos con pesos por horizonte. & Combinacion de pronosticos \citep{hyndman2021fpp3}. & Se usa solo si mejora estabilidad o ningun modelo domina. \\
+\addlinespace
+\multicolumn{5}{p{0.94\linewidth}}{\footnotesize\textit{Fuente: Elaboración propia con base en la literatura citada, la metodologia oficial del DANE y la matriz de auditoria interna de criterios estadisticos de la aplicacion.}}\\
+\bottomrule
+\end{longtable}
+\endgroup
+
+\newpage
+\addcontentsline{toc}{section}{Referencias bibliograficas}
+\bibliography{referencias}
+
+\end{document}

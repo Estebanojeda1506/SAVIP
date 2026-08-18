@@ -1,0 +1,41 @@
+# Versiones exactas del entorno productivo de SAVIP.
+# Cierre transitivo de requirements.txt, sin extras opcionales.
+# Sistema: Windows 11 (10.0.26200) x86_64 - Python 3.12.10 (CPython, MSC v.1943).
+#
+# statsmodels es OBLIGATORIO desde julio de 2026 y esta fijado a una version
+# exacta: su presencia o ausencia no puede cambiar resultados.
+
+charset-normalizer==3.4.4
+contourpy==1.3.3
+cycler==0.12.1
+et-xmlfile==2.0.0
+fonttools==4.62.1
+joblib==1.5.3
+kiwisolver==1.5.0
+lxml==6.0.2
+matplotlib==3.10.9
+numpy==2.4.2
+openpyxl==3.1.5
+packaging==26.0
+pandas==2.3.3
+patsy==1.0.2
+pillow==12.1.1
+pyparsing==3.3.2
+pyside6==6.11.0
+pyside6_addons==6.11.0
+pyside6_essentials==6.11.0
+python-dateutil==2.9.0.post0
+python-docx==1.2.0
+pytz==2026.1.post1
+pyxlsb==1.0.10
+reportlab==5.0.0
+scikit-learn==1.8.0
+scipy==1.17.1
+shiboken6==6.11.0
+six==1.17.0
+statsmodels==0.14.6
+threadpoolctl==3.6.0
+typing_extensions==4.15.0
+tzdata==2025.3
+
+# pytest no es dependencia: las suites traen su propio ejecutor.

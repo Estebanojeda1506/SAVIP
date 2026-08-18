@@ -1,0 +1,20 @@
+\begin{table}[H]
+\centering
+\caption{Ejemplos reales de validación walk-forward con Drift}
+\label{tab:ejemplo_walkforward_vias_urbanas}
+\scriptsize
+\begin{adjustbox}{max width=\linewidth}
+\begin{tabular}{lllrrrr}
+\toprule
+Origen r & Datos usados & Modelo & h & Pronóstico & Real & Error \\
+\midrule
+2025\_12 & 60 obs. & Drift & 1 & 137.3288 & 140.2000 & 2.8712 \\
+2025\_10 & 58 obs. & Drift & 3 & 138.1578 & 140.2000 & 2.0422 \\
+2025\_7 & 55 obs. & Drift & 6 & 139.9332 & 140.2000 & 0.2668 \\
+2025\_1 & 49 obs. & Drift & 12 & 140.1873 & 140.2000 & 0.0127 \\
+2024\_7 & 43 obs. & Drift & 18 & 141.4567 & 140.2000 & -1.2567 \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\par\footnotesize\textit{Fuente: Elaboración propia con datos extraídos del anexo oficial ICOCIV del DANE y cálculos reproducibles de la aplicación.}
+\end{table}

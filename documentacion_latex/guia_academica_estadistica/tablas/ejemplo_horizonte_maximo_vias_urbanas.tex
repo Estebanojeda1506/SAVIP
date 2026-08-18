@@ -1,0 +1,37 @@
+\begin{landscape}
+\begin{table}[H]
+\centering
+\caption{Determinación dinámica del horizonte máximo en la serie real}
+\label{tab:ejemplo_horizonte_maximo_vias_urbanas}
+\tiny
+\begin{adjustbox}{max width=\linewidth}
+\begin{tabular}{rrp{0.22\linewidth}rrrp{0.31\linewidth}}
+\toprule
+h & J h & Modelo final & RMSE & MAPE & IC95 relativo & Estado y decisión \\
+\midrule
+1 & 25 & Modelo sobre log-variacion mensual & 1.0617 & 0.6261\% & 0.0262 & Técnico -- permitir \\
+2 & 24 & Modelo sobre log-variacion mensual & 1.5991 & 1.0368\% & 0.0381 & Técnico -- permitir \\
+3 & 23 & Holt lineal & 2.0780 & 1.3661\% & 0.0481 & Técnico -- permitir \\
+4 & 22 & Holt lineal & 2.4728 & 1.6787\% & 0.0545 & Técnico -- permitir \\
+5 & 21 & Drift & 2.2601 & 1.5171\% & 0.0415 & Técnico -- permitir \\
+6 & 20 & Drift & 2.4779 & 1.5936\% & 0.0411 & Técnico -- permitir \\
+7 & 19 & Drift & 2.6817 & 1.6259\% & 0.0445 & Técnico -- permitir \\
+8 & 18 & Drift & 2.8195 & 1.6173\% & 0.0464 & Técnico -- permitir \\
+9 & 17 & Drift & 2.8276 & 1.6313\% & 0.0460 & Técnico -- permitir \\
+10 & 16 & Drift & 2.7289 & 1.5607\% & 0.0410 & Técnico -- permitir \\
+11 & 15 & Drift & 2.5350 & 1.5041\% & 0.0339 & Técnico -- permitir \\
+12 & 14 & Drift & 2.4025 & 1.4899\% & 0.0264 & Técnico -- permitir \\
+13 & 13 & Drift & 2.6956 & 1.7789\% & 0.0396 & Escenario -- solo escenario \\
+14 & 12 & Drift & 3.0584 & 2.0354\% & 0.0390 & Escenario -- solo escenario \\
+15 & 11 & Drift & 3.5416 & 2.3728\% & 0.0420 & Escenario -- solo escenario \\
+16 & 10 & Drift & 3.9970 & 2.6232\% & 0.0386 & Escenario -- solo escenario \\
+17 & 9 & Drift & 4.4478 & 2.9386\% & 0.0357 & Escenario -- solo escenario \\
+18 & 8 & Drift & 4.9492 & 3.2713\% & 0.0357 & Escenario -- solo escenario \\
+19 & 7 & Drift & 5.4421 & 3.6105\% & 0.0389 & Escenario -- solo escenario \\
+20 & 6 & Drift & 5.8099 & 3.8964\% & 0.0399 & Escenario -- solo escenario \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\par\footnotesize\textit{Fuente: Elaboración propia con datos extraídos del anexo oficial ICOCIV del DANE y cálculos reproducibles de la aplicación.}
+\end{table}
+\end{landscape}

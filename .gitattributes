@@ -1,0 +1,38 @@
+*.py text eol=lf
+*.qss text eol=lf
+*.txt text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Fuentes LaTeX y bibliografia: LF canonico, indiferente para pdflatex y bibtex.
+*.tex text eol=lf
+*.bib text eol=lf
+
+# Evidencia tabulada. Se conserva CRLF en el arbol de trabajo porque los
+# generadores (csv.writer) escriben CRLF: asi un CSV regenerado coincide byte a
+# byte con el versionado y una diferencia real no queda oculta tras un cambio de
+# salto de linea.
+*.csv text eol=crlf
+
+# Scripts de Windows: CRLF en el arbol de trabajo.
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Spec de PyInstaller: es Python.
+*.spec text eol=lf
+
+# Metadatos del repositorio.
+.gitignore text eol=lf
+.gitattributes text eol=lf
+
+# Binarios: nunca normalizar.
+*.png binary
+*.ico binary
+*.pdf binary
+*.xlsb binary
+*.xlsx binary
+*.docx binary
+*.zip binary

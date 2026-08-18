@@ -1,0 +1,363 @@
+\documentclass[12pt,letterpaper]{article}
+
+\usepackage[spanish,es-nodecimaldot]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=1in]{geometry}
+\usepackage{setspace}
+\usepackage[hidelinks]{hyperref}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{float}
+
+\onehalfspacing
+\setlength{\parindent}{0.5in}
+\setlength{\parskip}{0pt}
+\sloppy
+
+\lstdefinestyle{pythonicociv}{
+  language=Python,
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{blue!60!black},
+  stringstyle=\color{green!40!black},
+  commentstyle=\color{gray!70!black},
+  showstringspaces=false,
+  breaklines=true,
+  frame=single,
+  columns=fullflexible
+}
+
+\title{Documentación técnica de módulos de la aplicación ICOCIV}
+\author{Esteban Ojeda}
+\date{2026}
+
+\begin{document}
+
+\begin{titlepage}
+    \centering
+    \vspace*{1.5cm}
+    {\Large\bfseries Documentación técnica de módulos de la aplicación ICOCIV\par}
+    \vspace{0.5cm}
+    {\large Reorganización de arquitectura, flujo de código y dependencias internas\par}
+    \vspace{1.5cm}
+    {\large Autor: Esteban Ojeda\par}
+    {\large Universidad del Cauca\par}
+    {\large Programa de Ingeniería Civil\par}
+    \vfill
+    {\large Popayán, Colombia\par}
+    {\large 2026\par}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+\section{Introducción}
+
+Este documento describe la codificación y organización técnica de la aplicación ICOCIV después de la reorganización de módulos bajo una carpeta principal llamada \texttt{app\_icociv}. Su finalidad es permitir que una persona evaluadora, desarrolladora o revisora académica entienda el propósito de cada módulo sin tener que leer todo el código fuente de forma lineal.
+
+La reorganización no modifica la metodología oficial del DANE ni altera la lógica estadística de la aplicación. Su objetivo es ordenar responsabilidades: la interfaz visual queda separada del backend, los módulos estadísticos quedan separados de la generación documental y las rutas de proyecto se centralizan para evitar dependencias frágiles.
+
+\section{Propósito de la reorganización}
+
+Antes de la reorganización, los módulos principales estaban distribuidos entre carpetas como \texttt{migracion/} e \texttt{interfaz/}. Aunque el backend funcionaba, la estructura no comunicaba con claridad qué archivos pertenecían a datos, estadística, modelos, reportes, persistencia o UI. La nueva estructura permite:
+
+\begin{itemize}[leftmargin=*]
+    \item agrupar todo el código activo en una sola carpeta principal;
+    \item facilitar el mantenimiento académico y técnico;
+    \item actualizar imports bajo un espacio de nombres claro;
+    \item reducir ambigüedad entre validación de datos y validación predictiva;
+    \item conservar datos, reportes, sesiones y documentación fuera del paquete de código.
+\end{itemize}
+
+\section{Estructura general de carpetas}
+
+\begin{lstlisting}[style=pythonicociv]
+app_icociv/
+|-- config/
+|-- datos/
+|-- estadistica/
+|-- modelos/
+|-- validacion/
+|-- proyeccion/
+|-- reportes/
+|-- exportables/
+|-- persistencia/
+|-- servicios/
+|-- interfaz/
+`-- utilidades/
+\end{lstlisting}
+
+La carpeta \texttt{app\_icociv} contiene únicamente módulos de aplicación. Los anexos Excel, documentos académicos, sesiones JSON y reportes generados permanecen en carpetas externas para no mezclar código fuente con insumos o resultados.
+
+\section{Descripción de módulos de configuración}
+
+\begin{longtable}{p{0.18\textwidth}p{0.23\textwidth}p{0.27\textwidth}p{0.16\textwidth}p{0.16\textwidth}}
+\caption{Módulos de configuración}
+\label{tab:modulos_configuracion}\\
+\toprule
+Módulo & Ubicación & Propósito & Entradas & Salidas \\
+\midrule
+\endfirsthead
+\toprule
+Módulo & Ubicación & Propósito & Entradas & Salidas \\
+\midrule
+\endhead
+\texttt{rutas.py} & \texttt{app\_icociv/config/rutas.py} & Centraliza la raíz del proyecto y carpetas de sesiones, reportes y documentación. & Ubicación física del archivo. & Objetos \texttt{Path}. \\
+\texttt{settings.py} & \texttt{app\_icociv/config/settings.py} & Define nombre y versión de la aplicación. & Ninguna. & Constantes de identificación. \\
+\texttt{constantes.py} & \texttt{app\_icociv/config/constantes.py} & Define extensiones soportadas y horizontes UI predeterminados. & Ninguna. & Tuplas de constantes. \\
+\bottomrule
+\end{longtable}
+
+\section{Descripción de módulos de datos}
+
+\begin{longtable}{p{0.18\textwidth}p{0.23\textwidth}p{0.27\textwidth}p{0.16\textwidth}p{0.16\textwidth}}
+\caption{Módulos de datos}
+\label{tab:modulos_datos}\\
+\toprule
+Módulo & Ubicación & Propósito & Entradas & Salidas \\
+\midrule
+\endfirsthead
+\toprule
+Módulo & Ubicación & Propósito & Entradas & Salidas \\
+\midrule
+\endhead
+\texttt{cargador\_datos.py} & \texttt{app\_icociv/datos/cargador\_datos.py} & Lee anexos oficiales Excel o XLSB, detecta encabezados reales y extrae tablas A16.x. & Bytes del archivo y nombre. & Diccionario de tablas y periodos detectados. \\
+\bottomrule
+\end{longtable}
+
+Este módulo es la puerta de entrada de datos. No debe contener reglas de proyección ni lógica visual. Si se agregan nuevos anexos o formatos, la ampliación debe ocurrir aquí o en un módulo vecino dentro de \texttt{datos/}.
+
+\section{Descripción de módulos estadísticos}
+
+\begin{longtable}{p{0.17\textwidth}p{0.22\textwidth}p{0.27\textwidth}p{0.17\textwidth}p{0.17\textwidth}}
+\caption{Descripción técnica de módulos estadísticos}
+\label{tab:modulos_estadisticos}\\
+\toprule
+Módulo & Ubicación & Propósito & Entradas & Salidas \\
+\midrule
+\endfirsthead
+\toprule
+Módulo & Ubicación & Propósito & Entradas & Salidas \\
+\midrule
+\endhead
+\texttt{analisis\_series.py} & \texttt{app\_icociv/estadistica/} & Normaliza periodos, valida serie mensual, calcula variables derivadas y factibilidad descriptiva. & Serie con periodo e índice. & Validaciones, derivadas y mensajes. \\
+\texttt{criterios.py} & \texttt{app\_icociv/estadistica/} & Centraliza umbrales, criterios internos y matriz de auditoría metodológica. & Constantes y criterios declarados. & Matriz exportable y valores de referencia. \\
+\texttt{diagnostico\_residuos.py} & \texttt{app\_icociv/estadistica/} & Calcula Durbin-Watson, ACF, PACF, Ljung-Box opcional y advertencias residuales. & Residuos del modelo. & Diagnóstico residual estructurado. \\
+\texttt{metricas.py} & \texttt{app\_icociv/estadistica/} & Calcula MAE, RMSE, MAPE, sMAPE, MASE, AIC y AICc. & Observados, predichos y entrenamiento. & Métricas numéricas. \\
+\texttt{modelos\_interpretables.py} & \texttt{app\_icociv/estadistica/} & Ajusta modelos base, Holt lineal, Holt amortiguado, regresiones y modelos sobre variación cuando aplican. & Tiempo e índice. & Modelos candidatos, parámetros y predicciones. \\
+\texttt{validacion\_series.py} & \texttt{app\_icociv/estadistica/} & Realiza validaciones complementarias de serie temporal y outliers extremos. & Serie temporal. & Resumen de validación y alertas. \\
+\bottomrule
+\end{longtable}
+
+Los módulos estadísticos no deben importar clases de PySide6 ni escribir archivos de reporte. Su salida debe ser información estructurada para que la capa de proyección o reportes decida cómo presentarla.
+
+\section{Descripción de modelos predictivos}
+
+\begin{longtable}{p{0.18\textwidth}p{0.23\textwidth}p{0.27\textwidth}p{0.16\textwidth}p{0.16\textwidth}}
+\caption{Módulos de modelos predictivos}
+\label{tab:modulos_modelos}\\
+\toprule
+Módulo & Ubicación & Propósito & Entradas & Salidas \\
+\midrule
+\endfirsthead
+\toprule
+Módulo & Ubicación & Propósito & Entradas & Salidas \\
+\midrule
+\endhead
+\texttt{regresion.py} & \texttt{app\_icociv/modelos/regresion.py} & Contiene regresiones tradicionales y cálculo de intervalos bootstrap heredados. & Vectores de tiempo e índice. & Mejor modelo y parámetros. \\
+\bottomrule
+\end{longtable}
+
+El módulo \texttt{modelos/regresion.py} se conserva porque el backend lo usa para compatibilidad con rutinas previas. La comparación estadística moderna se coordina desde \texttt{estadistica/modelos\_interpretables.py} y \texttt{proyeccion/servicio\_proyeccion.py}.
+
+\section{Descripción de módulos de validación}
+
+\begin{longtable}{p{0.18\textwidth}p{0.23\textwidth}p{0.27\textwidth}p{0.16\textwidth}p{0.16\textwidth}}
+\caption{Módulos de validación predictiva}
+\label{tab:modulos_validacion}\\
+\toprule
+Módulo & Ubicación & Propósito & Entradas & Salidas \\
+\midrule
+\endfirsthead
+\toprule
+Módulo & Ubicación & Propósito & Entradas & Salidas \\
+\midrule
+\endhead
+\texttt{backtesting.py} & \texttt{app\_icociv/validacion/backtesting.py} & Ejecuta walk-forward validation, compara modelos y resume estabilidad predictiva. & Serie mensual, horizonte y modelo. & Predicciones históricas, errores y métricas. \\
+\bottomrule
+\end{longtable}
+
+Este módulo representa la validación fuera de muestra. No debe leer Excel ni generar reportes; recibe una serie ya preparada y devuelve evidencia predictiva.
+
+\section{Descripción de módulos de proyección}
+
+\begin{longtable}{p{0.18\textwidth}p{0.23\textwidth}p{0.27\textwidth}p{0.16\textwidth}p{0.16\textwidth}}
+\caption{Módulos de proyección}
+\label{tab:modulos_proyeccion}\\
+\toprule
+Módulo & Ubicación & Propósito & Entradas & Salidas \\
+\midrule
+\endfirsthead
+\toprule
+Módulo & Ubicación & Propósito & Entradas & Salidas \\
+\midrule
+\endhead
+\texttt{servicio\_proyeccion.py} & \texttt{app\_icociv/proyeccion/} & Resuelve selección jerárquica, construye serie, evalúa factibilidad, intervalos, horizontes y proyección final. & Tablas, selección, serie y horizonte solicitado. & Resultado integral de análisis y proyección. \\
+\bottomrule
+\end{longtable}
+
+Este módulo es el núcleo analítico del backend. Aunque coordina varias etapas, no debe incorporar UI ni abrir archivos desde diálogos. La interfaz o el orquestador entregan los insumos.
+
+\section{Descripción de módulos de reportes y exportables}
+
+\begin{longtable}{p{0.18\textwidth}p{0.23\textwidth}p{0.27\textwidth}p{0.16\textwidth}p{0.16\textwidth}}
+\caption{Módulos de reportes y exportables}
+\label{tab:modulos_reportes_exportables}\\
+\toprule
+Módulo & Ubicación & Propósito & Entradas & Salidas \\
+\midrule
+\endfirsthead
+\toprule
+Módulo & Ubicación & Propósito & Entradas & Salidas \\
+\midrule
+\endhead
+\texttt{generador\_reportes.py} & \texttt{app\_icociv/reportes/} & Genera PDF, DOCX, HTML, gráficas, tablas y textos técnicos. & Serie, resultado de proyección, selección y trazabilidad. & Archivos PDF, DOCX, HTML y figuras. \\
+\texttt{csv\_reproducible.py} & \texttt{app\_icociv/exportables/} & Expone la exportación CSV reproducible como módulo funcional. & Serie, proyección y ruta jerárquica. & CSV con observado, proyectado, intervalo del 95\,\% y metadatos. \\
+\bottomrule
+\end{longtable}
+
+Los reportes presentan resultados; no deben recalcular el modelo. Si se detecta una diferencia entre informe y backend, debe corregirse el backend o la extracción de datos del resultado, no duplicar fórmulas en el reporte.
+
+\section{Descripción de persistencia, utilidades e interfaz}
+
+\begin{longtable}{p{0.18\textwidth}p{0.23\textwidth}p{0.27\textwidth}p{0.16\textwidth}p{0.16\textwidth}}
+\caption{Módulos de soporte, persistencia e interfaz}
+\label{tab:modulos_soporte_interfaz}\\
+\toprule
+Módulo & Ubicación & Propósito & Entradas & Salidas \\
+\midrule
+\endfirsthead
+\toprule
+Módulo & Ubicación & Propósito & Entradas & Salidas \\
+\midrule
+\endhead
+\texttt{gestor\_sesiones.py} & \texttt{app\_icociv/persistencia/} & Guarda, carga y lista sesiones JSON locales. & Datos de sesión y ruta. & Archivos JSON y diccionarios. \\
+\texttt{utilidades.py} & \texttt{app\_icociv/utilidades/} & Normaliza periodos, filtra DataFrames y calcula auxiliares estadísticos. & Textos, DataFrames o arrays. & Valores normalizados o filtrados. \\
+\texttt{nomenclatura\_icociv.py} & \texttt{app\_icociv/utilidades/} & Centraliza nombres amigables de tablas, niveles y ruta jerárquica. & Claves técnicas ICOCIV. & Textos visibles y rutas normalizadas. \\
+\texttt{ventana\_principal.py} & \texttt{app\_icociv/interfaz/} & Construye la ventana PySide6, gráficos, selección de archivo, sesiones y botones de reporte. & Interacción del usuario. & UI y llamadas a controladores. \\
+\texttt{controlador\_principal.py} & \texttt{app\_icociv/interfaz/controladores/} & Coordina selección jerárquica y llamadas al backend desde UI. & Tablas, selección y eventos. & Estado de UI y resultados. \\
+\texttt{trabajadores.py} & \texttt{app\_icociv/interfaz/controladores/} & Ejecuta funciones largas en hilos Qt. & Función y argumentos. & Señales de resultado o error. \\
+\texttt{modelo\_tabla.py} & \texttt{app\_icociv/interfaz/widgets/} & Adapta DataFrames a tablas Qt. & DataFrame. & Modelo Qt para tabla. \\
+\bottomrule
+\end{longtable}
+
+\section{Descripción de servicios y orquestación}
+
+\begin{longtable}{p{0.18\textwidth}p{0.23\textwidth}p{0.27\textwidth}p{0.16\textwidth}p{0.16\textwidth}}
+\caption{Módulos de servicios y orquestación}
+\label{tab:modulos_servicios}\\
+\toprule
+Módulo & Ubicación & Propósito & Entradas & Salidas \\
+\midrule
+\endfirsthead
+\toprule
+Módulo & Ubicación & Propósito & Entradas & Salidas \\
+\midrule
+\endhead
+\texttt{orquestador.py} & \texttt{app\_icociv/servicios/} & Coordina carga de archivo, análisis completo y proyección de serie sin duplicar lógica interna. & Ruta de archivo, selección y horizonte. & Resultado integral del backend. \\
+\bottomrule
+\end{longtable}
+
+El orquestador es una fachada técnica. Su función es documentar el flujo y ofrecer un punto de entrada para scripts o pruebas, sin mezclar funciones estadísticas de bajo nivel.
+
+\section{Flujo general de ejecución}
+
+\begin{enumerate}[leftmargin=*]
+    \item El usuario abre la app con \texttt{python aplicacion.py}.
+    \item La interfaz permite seleccionar un archivo Excel o XLSB.
+    \item \texttt{datos/cargador\_datos.py} lee tablas y periodos.
+    \item El controlador actualiza los desplegables jerárquicos.
+    \item \texttt{proyeccion/servicio\_proyeccion.py} resuelve la fila seleccionada.
+    \item Se construye la serie mensual con periodo e índice.
+    \item \texttt{estadistica/analisis\_series.py} valida, normaliza y calcula variables derivadas.
+    \item \texttt{validacion/backtesting.py} ejecuta walk-forward.
+    \item \texttt{estadistica/metricas.py} calcula errores y métricas.
+    \item \texttt{proyeccion/servicio\_proyeccion.py} clasifica horizontes e intervalos.
+    \item \texttt{reportes/generador\_reportes.py} exporta PDF, DOCX, HTML o CSV.
+\end{enumerate}
+
+\section{Dependencias internas entre módulos}
+
+\begin{longtable}{p{0.28\textwidth}p{0.32\textwidth}p{0.32\textwidth}}
+\caption{Relación entre capas internas}
+\label{tab:dependencias_internas}\\
+\toprule
+Capa & Depende de & Usada por \\
+\midrule
+\endfirsthead
+\toprule
+Capa & Depende de & Usada por \\
+\midrule
+\endhead
+\texttt{datos} & \texttt{utilidades} & \texttt{interfaz}, \texttt{servicios}, \texttt{proyeccion} \\
+\texttt{estadistica} & \texttt{utilidades} & \texttt{validacion}, \texttt{proyeccion}, \texttt{reportes} \\
+\texttt{modelos} & \texttt{utilidades}, librerías científicas & \texttt{proyeccion} \\
+\texttt{validacion} & \texttt{estadistica}, \texttt{modelos} & \texttt{proyeccion} \\
+\texttt{proyeccion} & \texttt{datos}, \texttt{estadistica}, \texttt{validacion}, \texttt{modelos} & \texttt{interfaz}, \texttt{servicios}, \texttt{reportes} \\
+\texttt{reportes} & \texttt{estadistica}, \texttt{persistencia}, \texttt{utilidades} & \texttt{interfaz}, \texttt{servicios} \\
+\texttt{interfaz} & \texttt{config}, \texttt{datos}, \texttt{proyeccion}, \texttt{reportes}, \texttt{persistencia} & Usuario final \\
+\bottomrule
+\end{longtable}
+
+\section{Guía para agregar nuevos modelos}
+
+Para agregar un modelo:
+
+\begin{enumerate}[leftmargin=*]
+    \item Implementar el ajuste en \texttt{estadistica/modelos\_interpretables.py} o en \texttt{modelos/} si es una utilidad independiente.
+    \item Registrar nombre, tipo y razón metodológica en el catálogo de \texttt{proyeccion/servicio\_proyeccion.py}.
+    \item Asegurar que el modelo pueda ser reentrenado en cada origen walk-forward.
+    \item Definir parámetros reproducibles para reportes.
+    \item Agregar pruebas de importación, backtesting y reporte.
+\end{enumerate}
+
+\section{Guía para agregar nuevos criterios}
+
+Los criterios deben registrarse en \texttt{estadistica/criterios.py}. Cada criterio nuevo debe indicar:
+
+\begin{itemize}[leftmargin=*]
+    \item nombre técnico;
+    \item tipo de sustento;
+    \item valor o regla;
+    \item impacto en la decisión;
+    \item módulos donde se usa;
+    \item si puede recalibrarse.
+\end{itemize}
+
+\section{Guía para modificar reportes}
+
+Los reportes deben leer resultados ya calculados. No deben volver a ajustar modelos ni cambiar la factibilidad. Si una sección del informe necesita datos nuevos, primero se deben agregar al resultado del backend y luego presentarlos en \texttt{generador\_reportes.py}.
+
+\section{Buenas prácticas de mantenimiento}
+
+\begin{itemize}[leftmargin=*]
+    \item Mantener imports bajo \texttt{app\_icociv.*}.
+    \item Evitar rutas relativas basadas en la ubicación física de un widget.
+    \item Usar \texttt{config/rutas.py} para carpetas del proyecto.
+    \item Mantener docstrings en español para funciones principales.
+    \item No mezclar lógica estadística con interfaz.
+    \item No duplicar fórmulas en reportes.
+    \item Verificar \texttt{python tests/test\_imports\_modulos.py} después de cambios de arquitectura.
+\end{itemize}
+
+\section{Conclusiones}
+
+La reorganización bajo \texttt{app\_icociv/} permite que la aplicación se entienda como un sistema modular: datos, estadística, modelos, validación, proyección, reportes, exportables e interfaz tienen responsabilidades separadas. Esta separación mejora la mantenibilidad, facilita la revisión académica y reduce el riesgo de romper el backend estadístico al modificar la UI o los informes.
+
+\end{document}

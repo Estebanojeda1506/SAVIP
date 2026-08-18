@@ -1,0 +1,82 @@
+\section{Selección automática de modelos}
+
+\subsection{Por qué no basta usar \(R^2\)}
+
+El coeficiente de determinación \(R^2\) mide la proporción de variabilidad observada que es explicada por el modelo:
+
+\begin{equation}
+    R^2 = 1 - \frac{\sum_{t=1}^{T}(y_t-\hat{y}_t)^2}{\sum_{t=1}^{T}(y_t-\bar{y})^2}.
+    \label{eq:r2}
+\end{equation}
+
+Aunque es una medida útil de ajuste histórico, no garantiza capacidad predictiva. Un modelo más flexible puede aumentar \(R^2\) simplemente porque tiene más parámetros, incluso si su extrapolación futura es peor. En series temporales económicas, este problema es delicado porque el objetivo no es solo describir el pasado, sino anticipar periodos no observados.
+
+Por esa razón, el software considera \(R^2\) como una métrica complementaria, no como criterio único. La selección automática debe equilibrar ajuste, parsimonia, estabilidad residual, coherencia económica y desempeño predictivo en backtesting.
+
+\subsection{\(R^2\) ajustado}
+
+El \(R^2\) ajustado penaliza la inclusión de parámetros adicionales:
+
+\begin{equation}
+    R^2_{aj} = 1 - (1-R^2)\frac{T-1}{T-k-1},
+    \label{eq:r2_ajustado}
+\end{equation}
+
+donde \(T\) es el número de observaciones y \(k\) es el número de variables explicativas. Esta métrica permite comparar modelos con diferente complejidad de manera más prudente que el \(R^2\) simple.
+
+En el software, el \(R^2\) ajustado ayuda a evitar que un modelo polinómico sea preferido únicamente por agregar curvatura. Si la mejora de ajuste no compensa la complejidad adicional, el modelo más simple puede ser metodológicamente preferible.
+
+\subsection{AIC}
+
+El Criterio de Información de Akaike (AIC) compara modelos considerando bondad de ajuste y penalización por complejidad \parencite{hyndman2021fpp3}. En una formulación común para errores normales:
+
+\begin{equation}
+    AIC = T \ln\left(\frac{SSE}{T}\right) + 2p,
+    \label{eq:aic}
+\end{equation}
+
+donde \(p\) es el número de parámetros estimados. Un AIC menor indica mejor equilibrio entre ajuste y parsimonia. La lógica es que un modelo debe explicar los datos sin usar complejidad innecesaria.
+
+En índices ICOCIV, esta penalización es importante porque las series disponibles pueden tener longitud moderada. Un modelo demasiado flexible puede ajustarse a movimientos transitorios de materiales o insumos y producir una proyección exagerada.
+
+\subsection{AICc para muestras pequeñas}
+
+El AIC corregido para muestras pequeñas (AICc) añade una penalización adicional:
+
+\begin{equation}
+    AICc = AIC + \frac{2p(p+1)}{T-p-1}.
+    \label{eq:aicc}
+\end{equation}
+
+Esta corrección es especialmente relevante cuando \(T\) no es grande respecto al número de parámetros \parencite{hyndman_khandakar2008,hyndman2021fpp3}. En series mensuales ICOCIV, aunque puedan existir varios años de datos, la muestra sigue siendo pequeña en comparación con aplicaciones de alta frecuencia o grandes bases transversales. Por eso, AICc es más prudente que AIC cuando se comparan modelos de distinta complejidad.
+
+\subsection{Estabilidad predictiva}
+
+La estabilidad predictiva se evalúa observando cómo se comporta el modelo cuando se le exige predecir datos históricos no usados en su ajuste. Un modelo estable mantiene errores razonables en distintas ventanas temporales. Uno inestable puede ajustarse bien al conjunto completo y fallar cuando el origen de predicción cambia.
+
+El software estima esta estabilidad mediante backtesting temporal. Las métricas MAE, RMSE y MAPE complementan AICc porque responden a una pregunta diferente: no solo qué modelo ajustó mejor el pasado, sino qué modelo habría pronosticado mejor cuando ciertos periodos aún no estaban disponibles.
+
+\subsection{Criterios integrados de selección}
+
+La selección automática se entiende como una decisión multicriterio. La Tabla \ref{tab:criterios_seleccion} resume la función de cada criterio.
+
+\begin{table}[H]
+\centering
+\caption{Criterios metodológicos para selección de modelos}
+\label{tab:criterios_seleccion}
+\begin{tabular}{p{0.25\textwidth}p{0.6\textwidth}}
+\toprule
+\textbf{Criterio} & \textbf{Función en la selección} \\
+\midrule
+\(R^2\) y \(R^2_{aj}\) & Evalúan ajuste histórico, controlando parcialmente complejidad. \\
+AIC y AICc & Penalizan sobreajuste y favorecen modelos parsimoniosos. \\
+Durbin-Watson & Advierte autocorrelación residual que puede indicar mala especificación temporal. \\
+Jarque-Bera & Evalúa normalidad aproximada de residuos, útil para inferencia e intervalos. \\
+Backtesting & Evalúa capacidad predictiva fuera de muestra respetando orden temporal. \\
+Intervalo de confianza & Informa amplitud de incertidumbre y riesgo de extrapolación. \\
+Coherencia económica & Evita proyecciones incompatibles con la naturaleza del índice. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Este enfoque evita decisiones mecánicas basadas en una sola métrica. Para un informe técnico de ingeniería civil, la justificación del modelo debe expresar qué evidencia estadística y económica respaldó la selección.

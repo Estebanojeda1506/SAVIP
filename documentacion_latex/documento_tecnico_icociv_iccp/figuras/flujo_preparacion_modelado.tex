@@ -1,0 +1,63 @@
+\begin{landscape}
+\begin{figure}[H]
+\centering
+\begin{adjustbox}{max width=\linewidth,max height=0.88\textheight}
+\begin{tikzpicture}[
+    node distance=0.62cm and 1.35cm,
+    paso/.style={rectangle,rounded corners=2pt,draw=black!70,fill=blue!5,align=center,
+                 text width=3.6cm,minimum height=0.9cm,inner sep=3pt,font=\scriptsize},
+    grupo/.style={rectangle,rounded corners=2pt,draw=black!75,fill=green!8,align=center,
+                  text width=4.6cm,minimum height=1.0cm,inner sep=3pt,font=\scriptsize},
+    cond/.style={rectangle,rounded corners=2pt,draw=black!75,fill=orange!10,align=center,
+                 text width=4.6cm,minimum height=1.0cm,inner sep=3pt,font=\scriptsize},
+    flecha/.style={-{Latex[length=2mm]},thick}
+]
+% --- Columna 1: descendente ---
+\node[paso] (inicio) {Inicio};
+\node[paso,below=of inicio] (carga) {Carga de datos ICOCIV};
+\node[paso,below=of carga] (ruta) {Selección de ruta jerárquica};
+\node[paso,below=of ruta] (identifica) {Identificación de la serie};
+\node[paso,below=of identifica] (normaliza) {Normalización temporal};
+\node[paso,below=of normaliza] (valida) {Validación de datos};
+
+% --- Columna 2: ascendente (arranca abajo, alineada con 'valida') ---
+\node[paso,right=of valida] (faltantes) {Revisión de valores faltantes};
+\node[paso,above=of faltantes] (duplicados) {Revisión de duplicados};
+\node[paso,above=of duplicados] (nopositivos) {Revisión de valores no positivos};
+\node[paso,above=of nopositivos] (longitud) {Revisión de longitud mínima};
+\node[paso,above=of longitud] (descriptivo) {Análisis descriptivo};
+\node[paso,above=of descriptivo] (variaciones) {Variaciones mensuales y acumuladas};
+\node[paso,above=of variaciones] (outliers) {Detección robusta de atípicos};
+\node[paso,above=of outliers] (grilla) {Construcción de grilla mensual continua};
+
+% --- Columna 3: descendente (arranca arriba, alineada con 'grilla') ---
+\node[grupo,right=of grilla] (base)
+    {Modelos mínimos obligatorios\\Naive, Drift, Holt lineal y Holt amortiguado};
+\node[cond,below=of base] (ampliados)
+    {Modelos ampliados condicionales\\OLS, logarítmico, exponencial/log-lineal,\\variación, log-variación y robusto};
+\node[paso,below=of ampliados,text width=4.6cm] (salida)
+    {Conjunto de modelos candidatos\\para validación temporal};
+
+% --- Conexiones: dentro de cada columna y por los bordes, sin cruces ---
+\draw[flecha] (inicio) -- (carga);
+\draw[flecha] (carga) -- (ruta);
+\draw[flecha] (ruta) -- (identifica);
+\draw[flecha] (identifica) -- (normaliza);
+\draw[flecha] (normaliza) -- (valida);
+\draw[flecha] (valida) -- (faltantes);      % borde inferior, horizontal
+\draw[flecha] (faltantes) -- (duplicados);
+\draw[flecha] (duplicados) -- (nopositivos);
+\draw[flecha] (nopositivos) -- (longitud);
+\draw[flecha] (longitud) -- (descriptivo);
+\draw[flecha] (descriptivo) -- (variaciones);
+\draw[flecha] (variaciones) -- (outliers);
+\draw[flecha] (outliers) -- (grilla);
+\draw[flecha] (grilla) -- (base);            % borde superior, horizontal
+\draw[flecha] (base) -- (ampliados);
+\draw[flecha] (ampliados) -- (salida);
+\end{tikzpicture}
+\end{adjustbox}
+\caption{Flujo de preparación, validación y modelado de la serie ICOCIV.}
+\label{fig:flujo_preparacion_modelado}
+\end{figure}
+\end{landscape}

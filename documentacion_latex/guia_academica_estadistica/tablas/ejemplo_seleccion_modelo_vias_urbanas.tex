@@ -1,0 +1,21 @@
+\begin{table}[H]
+\centering
+\caption{Selección de modelo por horizonte en la serie real}
+\label{tab:ejemplo_seleccion_modelo_vias_urbanas}
+\scriptsize
+\begin{adjustbox}{max width=\linewidth}
+\begin{tabular}{rp{0.24\linewidth}p{0.20\linewidth}rp{0.32\linewidth}}
+\toprule
+h & Modelo ganador & Modelo final & RMSE & Estado y decisión \\
+\midrule
+1 & Modelo sobre log-variacion mensual & Modelo sobre log-variacion mensual & 1.0617 & Técnico -- permitir \\
+3 & Holt lineal & Holt lineal & 2.0780 & Técnico -- permitir \\
+6 & Drift & Drift & 2.4779 & Técnico -- permitir \\
+12 & Drift & Drift & 2.4025 & Técnico -- permitir \\
+18 & Drift & Drift & 4.9492 & Escenario -- solo escenario \\
+20 & Drift & Drift & 5.8099 & Escenario -- solo escenario \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\par\footnotesize\textit{Fuente: Elaboración propia con datos extraídos del anexo oficial ICOCIV del DANE y cálculos reproducibles de la aplicación.}
+\end{table}

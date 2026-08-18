@@ -1,0 +1,17 @@
+\section{Conclusiones}
+
+El software ICOCIV constituye una herramienta técnica de apoyo para el análisis y proyección de índices de costos de obras civiles publicados por el DANE. Su valor no reside únicamente en automatizar cálculos, sino en organizar un flujo metodológico completo: lectura robusta de datos oficiales, validación temporal, selección jerárquica, modelación interpretable, diagnóstico estadístico, backtesting y generación de informes técnicos.
+
+Desde el punto de vista estadístico, el documento muestra que las series ICOCIV deben tratarse como series temporales económicas. No son observaciones IID normales. Presentan dependencia temporal, tendencia, posible autocorrelación y sensibilidad a condiciones económicas. Por esta razón, el software incorpora validación cronológica y backtesting temporal en lugar de evaluaciones aleatorias que romperían la estructura pasado-futuro.
+
+La regresión lineal, polinómica, logarítmica y robusta ofrece un conjunto de modelos suficientemente flexible para representar trayectorias comunes de índices, sin sacrificar interpretabilidad. La selección automática no debe basarse solo en \(R^2\), sino en un balance entre ajuste, parsimonia, residuos, AICc, estabilidad predictiva e incertidumbre. Esta lógica es coherente con la literatura de forecasting y econometría aplicada.
+
+El análisis residual fortalece la confiabilidad del sistema porque permite identificar patrones no explicados, autocorrelación, desviaciones de normalidad y posibles problemas de especificación. A su vez, los intervalos de confianza o predicción recuerdan que toda proyección contiene incertidumbre. Una estimación futura debe interpretarse como soporte cuantitativo condicionado, no como certeza contractual.
+
+El backtesting temporal es uno de los elementos metodológicos más importantes del software. Al simular predicciones históricas usando únicamente información pasada, permite evaluar capacidad predictiva real. Métricas como MAE, RMSE y MAPE ofrecen una lectura práctica del error y ayudan a justificar la elección del modelo ante usuarios técnicos y jurados académicos.
+
+En términos de ingeniería civil, la interpretación estadística debe complementarse con contexto económico. Materiales, transporte, combustibles, mano de obra, inflación y condiciones internacionales pueden influir en los índices. El software aporta evidencia numérica, pero el juicio profesional sigue siendo necesario para valorar riesgos, choques externos y pertinencia de uso.
+
+La decisión de evitar modelos de caja negra en esta etapa es metodológicamente defendible. Para un sistema institucional, local y orientado a documentación técnica, la transparencia es prioritaria. Los modelos interpretables permiten explicar supuestos, limitaciones y resultados con claridad, lo cual fortalece la reproducibilidad y la aceptación académica del sistema.
+
+Finalmente, el software representa una evolución desde una calculadora de proyecciones hacia un sistema de análisis estadístico y validación predictiva de índices ICOCIV. Su aporte académico consiste en integrar datos oficiales, fundamentos econométricos y documentación reproducible para apoyar el análisis de costos en obras civiles. Su aporte técnico consiste en ofrecer una base local, liviana y trazable para producir informes que puedan respaldar decisiones profesionales e institucionales.

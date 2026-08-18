@@ -1,0 +1,73 @@
+\section{Análisis residual}
+
+\subsection{Concepto de residuo}
+
+El residuo de un modelo es la diferencia entre el valor observado y el valor ajustado. En econometría aplicada, su análisis es una etapa central para evaluar si los supuestos del modelo son razonables y si los errores contienen información sistemática no explicada \parencite{penn_state_stat501}:
+
+\begin{equation}
+    e_t = y_t - \hat{y}_t.
+    \label{eq:residuo}
+\end{equation}
+
+Los residuos contienen la parte de la serie que el modelo no explicó. Por ello, no deben tratarse como un elemento secundario. En una regresión bien especificada para fines predictivos, los residuos deberían fluctuar alrededor de cero, sin tendencia clara, sin patrones persistentes y sin cambios extremos de varianza.
+
+En el software ICOCIV, el análisis residual cumple una función de control metodológico. Si un modelo presenta buen \(R^2\), pero sus residuos muestran patrón temporal, el ajuste puede estar capturando la forma general de la serie sin representar correctamente su dinámica. Esta situación es común en series económicas con autocorrelación o cambios de régimen.
+
+\subsection{Media residual y patrón visual}
+
+La media de los residuos se calcula como:
+
+\begin{equation}
+    \bar{e} = \frac{1}{T}\sum_{t=1}^{T} e_t.
+    \label{eq:media_residual}
+\end{equation}
+
+Una media cercana a cero es deseable, pero no suficiente. Un modelo puede tener media residual cero y aun así mostrar patrones: errores positivos consecutivos, errores negativos durante una etapa completa o varianza creciente. Por esta razón, el informe técnico debe incluir gráfica de residuos cuando se genera documentación estadística avanzada.
+
+La inspección visual no sustituye las pruebas formales, pero ayuda a detectar comportamientos que una métrica agregada puede ocultar. En índices ICOCIV, un patrón residual puede indicar que el modelo no está capturando una aceleración, desaceleración, choque de insumo o periodo de alta volatilidad.
+
+\subsection{Autocorrelación residual}
+
+La autocorrelación residual ocurre cuando los errores del modelo están correlacionados con errores pasados. En términos prácticos, significa que el modelo dejó información temporal sin explicar. Si los residuos son autocorrelacionados, las predicciones pueden ser sistemáticamente tardías o adelantadas frente a cambios de la serie.
+
+La prueba de Durbin-Watson es una herramienta clásica para detectar autocorrelación serial de primer orden en residuos de regresión \parencite{statsmodels_durbin_watson}. Su estadístico se define como:
+
+\begin{equation}
+    DW = \frac{\sum_{t=2}^{T}(e_t-e_{t-1})^2}{\sum_{t=1}^{T}e_t^2}.
+    \label{eq:durbin_watson}
+\end{equation}
+
+La interpretación aproximada es:
+
+\begin{itemize}
+    \item \(DW \approx 2\): ausencia de autocorrelación de primer orden;
+    \item \(DW < 2\): posible autocorrelación positiva;
+    \item \(DW > 2\): posible autocorrelación negativa.
+\end{itemize}
+
+En índices económicos, la autocorrelación positiva es frecuente porque las variaciones de precios pueden persistir. Si el software detecta valores de Durbin-Watson alejados de 2, el informe debe advertir que la estructura temporal no fue completamente capturada por la regresión.
+
+\subsection{Normalidad residual y Jarque-Bera}
+
+La prueba Jarque-Bera evalúa si los residuos tienen asimetría y curtosis compatibles con una distribución normal \parencite{statsmodels_jarque_bera}. El estadístico se calcula como:
+
+\begin{equation}
+    JB = \frac{T}{6}\left(S^2 + \frac{(K-3)^2}{4}\right),
+    \label{eq:jarque_bera}
+\end{equation}
+
+donde \(S\) es la asimetría y \(K\) es la curtosis. Bajo condiciones ideales, el estadístico se compara con una distribución chi-cuadrado con dos grados de libertad.
+
+La normalidad residual es relevante para construir intervalos e interpretar inferencia. Sin embargo, en series económicas reales no debe exigirse como dogma. Choques de mercado, cambios en precios internacionales o eventos logísticos pueden producir colas pesadas. Por eso, el software interpreta Jarque-Bera como diagnóstico, no como criterio absoluto de descarte.
+
+\subsection{Heterocedasticidad básica}
+
+La heterocedasticidad ocurre cuando la varianza de los residuos cambia a lo largo del tiempo. En índices de costos, puede aparecer durante periodos de alta inflación, volatilidad de combustibles o cambios bruscos de insumos. Una forma básica de observarla es graficar residuos contra el tiempo o contra valores ajustados.
+
+Si la variabilidad residual aumenta hacia el final de la serie, la incertidumbre de la proyección también debería interpretarse con mayor cautela. El software, al generar intervalos aproximados y reportar métricas de error, debe comunicar que un intervalo estrecho no elimina riesgos derivados de volatilidad futura no observada.
+
+\subsection{ACF y PACF como herramientas exploratorias}
+
+La función de autocorrelación (ACF) mide la relación entre la serie y sus rezagos. La función de autocorrelación parcial (PACF) mide la relación con un rezago específico controlando rezagos intermedios. ACF y PACF son útiles para documentar la dependencia temporal de la serie.
+
+En informes académicos, estas gráficas permiten justificar que la serie fue tratada como temporal y no como datos IID. Si la ACF muestra persistencia en varios rezagos, el análisis debe advertir que la regresión representa una aproximación de tendencia y que la dependencia residual puede requerir extensiones futuras.

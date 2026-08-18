@@ -1,0 +1,70 @@
+\documentclass[11pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-noshorthands]{babel}
+\usepackage{lmodern}
+\usepackage{geometry}
+\geometry{letterpaper, margin=2.2cm}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{pdflscape}
+\usepackage{adjustbox}
+
+\newcommand{\ICOCIV}{ICOCIV}
+\newcommand{\ICCP}{ICCP}
+\newcommand{\DANE}{DANE}
+\newcommand{\IDU}{IDU}
+
+\title{Evidencia metodológica de cumplimiento\\
+\large Documento de respaldo del proyecto SAVIP --- Sistema de Análisis de Variaciones de Precios}
+\author{Documento de respaldo independiente}
+\date{Julio de 2026}
+
+\begin{document}
+
+\maketitle
+
+\section*{Nota de contexto}
+
+Este documento conserva, como evidencia de respaldo, la matriz de trazabilidad
+metodológica que originalmente figuraba en el capítulo de metodología del
+documento final del trabajo de grado. Se extrajo a un documento independiente
+para no recargar el cuerpo de la tesis, manteniéndolo disponible por si fuera
+necesario consultarlo o sustentarlo en el futuro. Su contenido no se ha
+alterado en lo sustancial respecto de la versión original.
+
+La matriz relaciona, para cada paso metodológico, las fuentes y datos
+revisados, su materialización en la aplicación, el producto verificable
+obtenido y la limitación identificada.
+
+\begin{landscape}
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.18\linewidth}>{\raggedright\arraybackslash}p{0.18\linewidth}>{\raggedright\arraybackslash}p{0.20\linewidth}>{\raggedright\arraybackslash}p{0.18\linewidth}>{\raggedright\arraybackslash}p{0.18\linewidth}@{}}
+\caption{Evidencia de cumplimiento de los pasos metodológicos}\label{tab:evidencia_metodologica}\\
+\toprule
+\textbf{Paso metodológico} & \textbf{Fuentes y datos revisados} & \textbf{Materialización en la aplicación} & \textbf{Producto verificable} & \textbf{Limitación identificada} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Paso metodológico} & \textbf{Fuentes y datos revisados} & \textbf{Materialización en la aplicación} & \textbf{Producto verificable} & \textbf{Limitación identificada} \\
+\midrule
+\endhead
+ESTUDIO DE LAS NECESIDADES DEL SISTEMA & Anexos de la entidad, herramienta previa en Excel, documentos \DANE{}, lineamientos \IDU{} y archivos \ICCP--\ICOCIV. & Separación entre consulta \ICOCIV{}, proyección, empalme y reportes; identificación de riesgos por rangos manuales, actualización parcial de índices y pérdida de trazabilidad. & Requerimientos funcionales y no funcionales, comparación Excel-aplicación y flujo general del sistema. & La revisión técnica de equivalencias contractuales sigue dependiendo del profesional responsable. \\
+\addlinespace
+DISEÑO DE LA PLATAFORMA DE SOFTWARE & Estructura de anexos \ICOCIV{}, Anexo 10 \ICCP{} histórico, flujos de interfaz y reportes requeridos. & Arquitectura por capas: datos, estadística, validación, proyección, servicios, interfaz y reportes. & Selector jerárquico, servicios desacoplados, tablas acumulativas y salidas documentales. & El diseño se concibió para operación de escritorio; no se implementó autenticación ni operación multiusuario. \\
+\addlinespace
+DESARROLLO E IMPLEMENTACIÓN DEL SOFTWARE & Código fuente de la aplicación, pruebas internas, anexos oficiales y documentación técnica de análisis estadístico. & Implementación de cargador de anexos, preparación de series, modelos candidatos, backtesting, empalme general, acero, reportes DOCX y exportación Excel. & Módulos de datos, proyección, backtesting, métricas, empalme y componentes de interfaz. & Algunos procesos dependen de librerías estadísticas y de manejo de documentos disponibles en el entorno de ejecución. \\
+\addlinespace
+ANÁLISIS ESTADÍSTICO Y VALIDACIÓN DE RESULTADOS & Guía estadística previa, Hyndman y Athanasopoulos, Hyndman y Koehler, Tashman, criterios internos y componentes de diagnóstico. & Validación de continuidad, longitud mínima, modelos Naive, Drift, Holt lineal y Holt amortiguado, métricas MAE, RMSE, MAPE, sMAPE, MASE, sesgo, residuos e intervalos. & Resultados con modelo seleccionado, métricas, horizonte máximo recomendado, advertencias, intervalo de predicción del 95\,\% y explicación metodológica. & Ninguna proyección equivale a dato oficial publicado; los horizontes largos aumentan la incertidumbre. \\
+\addlinespace
+INTEGRACIÓN Y VALIDACIÓN FUNCIONAL DEL SISTEMA & Flujos de usuario, pruebas manuales, pruebas automatizadas del proyecto y revisión de botones y tablas. & Conexión entre selección \ICOCIV{}, serie histórica, proyección, empalme y reportes; bloqueo de cálculos con entradas inválidas. & Tablas de equivalencias, tabla de valor ajustado, detalle técnico, mensajes de error y exportables. & La validación gráfica final requiere interacción de usuario y archivos oficiales representativos. \\
+\addlinespace
+DOCUMENTACIÓN Y MANUAL DE USUARIO & Documento de trabajo de grado, documentación estadística del proyecto, referencias APA y código real de la aplicación. & Redacción de capítulos técnicos, manual de uso, fórmulas, ejemplos numéricos y advertencias de interpretación. & Documento LaTeX compilable, PDF final, referencias y secciones de pruebas y manual. & Las capturas finales deben actualizarse cuando se congele la interfaz definitiva de entrega. \\
+\addlinespace
+PUESTA EN CONOCIMIENTO A LA SECRETARÍA DE INFRAESTRUCTURA DE LA GOBERNACIÓN DEL CAUCA & Alcance institucional del proyecto, anexos de soporte y salidas generadas por la aplicación. & Preparación de material explicativo para mostrar carga de datos, proyección, empalme, exportación y límites de interpretación. & Documento técnico, manual, exportables y ejemplos reproducibles de cálculo. & La socialización formal depende de la agenda institucional y de la revisión del director y los evaluadores. \\
+\bottomrule
+\end{longtable}
+\end{landscape}
+
+\end{document}

@@ -1,0 +1,54 @@
+﻿\begin{landscape}
+\begin{figure}[p]
+\centering
+\begin{adjustbox}{max width=\linewidth, max height=0.90\textheight}
+\begin{tikzpicture}[
+    node distance=0.62cm and 1.05cm,
+    paso/.style={rectangle, rounded corners=2pt, draw=black!70, fill=blue!5, align=center, minimum width=3.35cm, minimum height=0.72cm, font=\scriptsize},
+    grupo/.style={rectangle, rounded corners=2pt, draw=black!75, fill=green!7, align=center, minimum width=4.35cm, minimum height=0.84cm, font=\scriptsize},
+    cond/.style={rectangle, rounded corners=2pt, draw=black!75, fill=orange!10, align=center, minimum width=4.35cm, minimum height=0.84cm, font=\scriptsize},
+    flecha/.style={-{Latex[length=2mm]}, thick}
+]
+\node[paso] (inicio) {Inicio};
+\node[paso, below=of inicio] (carga) {Carga de datos ICOCIV};
+\node[paso, below=of carga] (ruta) {Selección de ruta jerárquica};
+\node[paso, below=of ruta] (identifica) {Identificación de la serie};
+\node[paso, below=of identifica] (normaliza) {Normalización temporal};
+\node[paso, below=of normaliza] (valida) {Validación de datos};
+
+\node[paso, right=of carga] (faltantes) {Revisión de valores faltantes};
+\node[paso, below=of faltantes] (duplicados) {Revisión de duplicados};
+\node[paso, below=of duplicados] (nopositivos) {Revisión de valores no positivos};
+\node[paso, below=of nopositivos] (longitud) {Revisión de longitud mínima};
+\node[paso, below=of longitud] (descriptivo) {Análisis descriptivo};
+\node[paso, below=of descriptivo] (variaciones) {Variaciones mensuales y acumuladas};
+\node[paso, below=of variaciones] (outliers) {Detección robusta de atípicos};
+\node[paso, below=of outliers] (horizontes) {Grilla mensual continua\\\(h=1,2,\ldots,H\)};
+
+\node[grupo, right=of faltantes] (base) {Modelos mínimos obligatorios\\Naive, Drift, Holt lineal, Holt amortiguado};
+\node[cond, below=of base] (ampliados) {Modelos ampliados condicionales\\OLS, logarítmico, exponencial/log-lineal,\\variación mensual, log-variación, robustos,\\ensamble};
+\node[paso, below=of ampliados] (salida) {Conjunto de modelos candidatos\\para validación temporal};
+
+\draw[flecha] (inicio) -- (carga);
+\draw[flecha] (carga) -- (ruta);
+\draw[flecha] (ruta) -- (identifica);
+\draw[flecha] (identifica) -- (normaliza);
+\draw[flecha] (normaliza) -- (valida);
+\draw[flecha] (valida.east) -- (faltantes.west);
+\draw[flecha] (faltantes) -- (duplicados);
+\draw[flecha] (duplicados) -- (nopositivos);
+\draw[flecha] (nopositivos) -- (longitud);
+\draw[flecha] (longitud) -- (descriptivo);
+\draw[flecha] (descriptivo) -- (variaciones);
+\draw[flecha] (variaciones) -- (outliers);
+\draw[flecha] (outliers) -- (horizontes);
+\draw[flecha] (horizontes.east) -- ++(0.45,0) |- (base.west);
+\draw[flecha] (base) -- (ampliados);
+\draw[flecha] (ampliados) -- (salida);
+\end{tikzpicture}
+\end{adjustbox}
+\par\footnotesize\textit{Fuente: Elaboración propia. Diagrama de lógica metodológica interna de la aplicación, construido con base en la validación temporal y los criterios documentados en el informe.}\par\normalsize
+\caption{Flujo de preparación, validación y modelado de la serie ICOCIV.}
+\label{fig:flujo_preparacion_modelado}
+\end{figure}
+\end{landscape}

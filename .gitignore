@@ -1,0 +1,101 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Entornos locales
+.venv/
+venv/
+env/
+.env
+*.key
+*.pem
+
+# Artefactos de escritorio / empaquetado
+.venv-build/
+build/
+dist/
+# Specs temporales generados por PyInstaller en la raiz. El spec definitivo
+# vive en packaging/ y SI debe versionarse (ver excepcion siguiente).
+/*.spec
+!packaging/SAVIP.spec
+
+# Datos y salidas generadas
+*.xlsb
+*.xlsx
+*.docx
+reportes_generados/
+sesiones/
+exports/
+
+# Salidas temporales de LaTeX
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.run.xml
+*.synctex.gz
+*.toc
+*.lof
+*.lot
+
+# Documentos compilados. main.pdf NO se versiona (decision del 29-jul-2026):
+# se reconstruye desde las fuentes LaTeX con la secuencia documentada en
+# CLAUDE.md y se entrega como artefacto del paquete de auditoria acompanado de
+# su SHA-256. Versionar el PDF permitiria que el binario y las fuentes
+# divergieran sin que nadie lo note.
+*.pdf
+
+# Paquetes de auditoria y sus comprimidos. Son artefactos de entrega, no
+# fuentes: se generan desde el arbol versionado y llevan sus propios hashes.
+SAVIP_AUDITORIA_FASE_1/
+SAVIP_AUDITORIA_ANTECEDENTES/
+SHA256_PAQUETES.txt
+*.zip
+
+# Biblioteca de referencias de terceros. Excluida hasta revisar los permisos de
+# redistribucion de cada fuente (decision del 29-jul-2026). Lo que SI se
+# versiona es la bibliografia y su trazabilidad:
+#   documentacion_latex/documento_tecnico_icociv_iccp/referencias.bib
+#   docs/referencias/MATRIZ_REFERENCIAS.csv
+#   docs/referencias/MANIFIESTO_FUENTES_EXTERNAS.md
+referencias_bibliograficas/
+documentacion/Referencias Mendeley/
+documentacion/Referencias Egor Howell YT/
+documentacion/Documento de explicación avances/
+
+# Andamiaje de herramientas de agentes (no es codigo del proyecto).
+.agents/
+.codex/
+.specify/
+
+# Trabajo temporal
+tmp/
+
+# Material legado no activo
+legado/
+
+# Sistema / editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Empaquetado de ejecutable (no versionar salidas generadas).
+# El .spec definitivo (packaging/) y los scripts (scripts/) SI se versionan.
+build/
+dist/
+release/
+*.spec.tmp
+installer/output/
+
+# Registros de ejecucion
+logs/
+*.log

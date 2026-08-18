@@ -1,0 +1,8 @@
+archivo=C:\Users\Esteban\Desktop\Proyecto trabajo de grado\Proyecto\anex-ICOCIV-ene2026.xlsb
+fuente=T_16_2
+codigo_grupo=530201
+codigo_subclase=53211
+codigo_tipologia=53211_07
+observaciones=61
+periodo_inicial=2021_1
+periodo_final=2026_1

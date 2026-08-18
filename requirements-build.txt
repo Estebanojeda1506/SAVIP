@@ -1,0 +1,7 @@
+# Dependencias necesarias unicamente para construir el ejecutable de Windows.
+# Las dependencias de ejecucion estan en requirements.txt.
+#
+# Instalacion:  python -m pip install -r requirements.txt -r requirements-build.txt
+# Ver docs/claude/EXE_BUILD_GUIDE.md para el procedimiento completo.
+
+pyinstaller>=6.6

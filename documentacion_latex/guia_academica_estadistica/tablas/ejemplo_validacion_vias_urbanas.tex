@@ -1,0 +1,24 @@
+\begin{table}[H]
+\centering
+\caption{Validación de datos de la serie real}
+\label{tab:ejemplo_validacion_vias_urbanas}
+\scriptsize
+\begin{adjustbox}{max width=\linewidth}
+\begin{tabular}{p{0.24\linewidth}p{0.22\linewidth}p{0.42\linewidth}}
+\toprule
+Criterio & Resultado en la serie real & Interpretación \\
+\midrule
+Observaciones & 61 & Historia mensual disponible para análisis. \\
+Periodo inicial & 2021-01 & Primer mes observado. \\
+Periodo final & 2026-01 & Último mes observado. \\
+Meses faltantes & 0 & Cero indica continuidad mensual completa. \\
+Duplicados & 0 & Cero evita ambigüedad temporal. \\
+Valores no numéricos & 0 & Cero permite cálculo estadístico directo. \\
+Valores no positivos & 0 & Cero habilita modelos con ln. \\
+Apta para modelos logarítmicos & Sí & Todos los índices son positivos. \\
+Apta para backtesting & Sí & La longitud permite ventanas walk-forward. \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\par\footnotesize\textit{Fuente: Elaboración propia con datos extraídos del anexo oficial ICOCIV del DANE y cálculos reproducibles de la aplicación.}
+\end{table}

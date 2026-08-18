@@ -1,0 +1,25 @@
+\begin{table}[H]
+\centering
+\caption{Comparación real contra benchmarks Naive y Drift}
+\label{tab:ejemplo_benchmarks_vias_urbanas}
+\scriptsize
+\begin{adjustbox}{max width=\linewidth}
+\begin{tabular}{rlrrrrrrp{0.18\linewidth}}
+\toprule
+Horizonte & Modelo & MAE & RMSE & MAPE & MASE & rRMSE vs Naive & rRMSE vs Drift & Decisión \\
+\midrule
+1 & Naive & 0.7472 & 1.1950 & 0.5624\% & 1.0753 & 1.0000 & 1.1756 & Benchmark de referencia \\
+1 & Drift & 0.7761 & 1.0165 & 0.5858\% & 1.1110 & 0.8507 & 1.0000 & Benchmark con tendencia \\
+3 & Naive & 1.5483 & 2.1763 & 1.1600\% & 2.2278 & 1.0000 & 1.2495 & Benchmark de referencia \\
+3 & Drift & 1.5700 & 1.7418 & 1.1846\% & 2.2154 & 0.8003 & 1.0000 & Benchmark con tendencia \\
+6 & Naive & 2.7410 & 3.3415 & 2.0394\% & 3.9256 & 1.0000 & 1.3486 & Benchmark de referencia \\
+6 & Drift & 2.1063 & 2.4779 & 1.5936\% & 2.8980 & 0.7415 & 1.0000 & Benchmark con tendencia \\
+12 & Naive & 6.2136 & 6.2758 & 4.5862\% & 8.7234 & 1.0000 & 2.6121 & Benchmark de referencia \\
+12 & Drift & 2.0001 & 2.4025 & 1.4899\% & 2.7233 & 0.3828 & 1.0000 & Benchmark con tendencia \\
+18 & Naive & 8.4075 & 8.5745 & 6.1458\% & 11.4512 & 1.0000 & 1.7325 & Benchmark de referencia \\
+18 & Drift & 4.4664 & 4.9492 & 3.2713\% & 5.9650 & 0.5772 & 1.0000 & Benchmark con tendencia \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\par\footnotesize\textit{Fuente: Elaboración propia con datos extraídos del anexo oficial ICOCIV del DANE y cálculos reproducibles de la aplicación.}
+\end{table}

@@ -1,0 +1,85 @@
+\section{Regresión y modelación}
+
+\subsection{Regresión como herramienta interpretable}
+
+La regresión permite modelar la relación entre una variable dependiente y una o más variables explicativas. En el software ICOCIV, la variable dependiente es el índice seleccionado y la variable explicativa principal es el tiempo. El objetivo no es demostrar causalidad estructural, sino representar la trayectoria histórica del índice y proyectar su tendencia bajo un enfoque interpretable.
+
+La elección de regresiones simples y robustas responde a la naturaleza del proyecto. En ingeniería civil aplicada, una proyección debe poder explicarse de forma clara. El usuario necesita saber si el modelo asume crecimiento lineal, curvatura o respuesta logarítmica. Esta transparencia es más defendible académicamente que un modelo de caja negra cuyo resultado sea difícil de auditar.
+
+\subsection{Regresión lineal}
+
+La regresión lineal modela el índice como una función lineal del tiempo:
+
+\begin{equation}
+    y_t = \beta_0 + \beta_1 t + \varepsilon_t,
+    \label{eq:regresion_lineal}
+\end{equation}
+
+donde \(y_t\) es el índice en el periodo \(t\), \(\beta_0\) es el intercepto, \(\beta_1\) es la pendiente temporal y \(\varepsilon_t\) es el término de error. La pendiente indica el cambio promedio esperado del índice por cada periodo mensual.
+
+En índices ICOCIV, la regresión lineal tiene sentido cuando la serie muestra una tendencia relativamente estable. Por ejemplo, si un grupo de costos aumenta de manera gradual por inflación general y sin curvaturas fuertes, el modelo lineal puede ofrecer una aproximación clara. Su principal ventaja es la interpretabilidad; su limitación es que no captura aceleraciones o desaceleraciones relevantes.
+
+El ajuste por mínimos cuadrados ordinarios busca minimizar la suma de errores cuadrados:
+
+\begin{equation}
+    SSE = \sum_{t=1}^{T} (y_t - \hat{y}_t)^2.
+    \label{eq:sse}
+\end{equation}
+
+La minimización del \(SSE\) favorece modelos con errores pequeños, pero también puede ser sensible a valores extremos. Por ello, el software complementa la regresión lineal con alternativas robustas y diagnósticos residuales \parencite{penn_state_robust_regression}.
+
+\subsection{Regresión polinómica}
+
+La regresión polinómica permite capturar curvatura:
+
+\begin{equation}
+    y_t = \beta_0 + \beta_1 t + \beta_2 t^2 + \varepsilon_t.
+    \label{eq:regresion_polinomica}
+\end{equation}
+
+El término \(t^2\) permite representar aceleración o desaceleración. En un índice de costos, esto puede ser útil cuando el crecimiento no es constante: por ejemplo, una fase de incrementos rápidos seguida de estabilización, o una tendencia que se intensifica por presiones acumuladas de mercado.
+
+La flexibilidad adicional tiene un costo. Un modelo polinómico puede ajustarse muy bien al pasado y extrapolar de forma poco razonable hacia el futuro. Este riesgo se conoce como sobreajuste. Por eso, el software no selecciona automáticamente el modelo polinómico solo porque tenga mayor \(R^2\). Su aceptación depende también de criterios de información, comportamiento residual, tendencia económica y desempeño en backtesting.
+
+\subsection{Modelos logarítmicos y crecimiento desacelerado}
+
+El software incluye una forma logarítmica respecto al tiempo:
+
+\begin{equation}
+    y_t = \beta_0 + \beta_1 \log(t + 1) + \varepsilon_t.
+    \label{eq:modelo_logaritmico}
+\end{equation}
+
+Esta especificación puede representar crecimiento inicial más rápido que luego se desacelera. En términos económicos, puede ser razonable para series que incorporan un ajuste fuerte después de un choque y luego retornan a una trayectoria más estable.
+
+El término \(\log(t+1)\) se usa porque el tiempo inicia en cero dentro del sistema. Sumar uno evita el logaritmo de cero y conserva la secuencia temporal. La interpretación de \(\beta_1\) no es un cambio mensual constante, sino un efecto decreciente del tiempo sobre el índice.
+
+\subsection{Modelos exponenciales como referencia conceptual}
+
+Los modelos exponenciales son apropiados cuando el crecimiento es proporcional al nivel de la serie. Una forma básica es:
+
+\begin{equation}
+    y_t = \alpha e^{\beta t}\eta_t,
+    \label{eq:modelo_exponencial}
+\end{equation}
+
+que puede linealizarse como:
+
+\begin{equation}
+    \log(y_t) = \log(\alpha) + \beta t + u_t.
+    \label{eq:modelo_exponencial_log}
+\end{equation}
+
+Este tipo de modelo tiene conexión con inflación compuesta y crecimiento acumulativo. Sin embargo, su uso debe ser cuidadoso porque puede producir extrapolaciones excesivas si el horizonte es largo o si el crecimiento reciente fue excepcional. En la versión actual del software, la familia principal implementada prioriza modelos lineales, polinómicos, logarítmicos y robustos. Los modelos exponenciales se consideran una extensión metodológica posible siempre que sean evaluados con los mismos criterios de validación y backtesting.
+
+\subsection{Regresión robusta}
+
+La regresión robusta busca reducir la influencia de observaciones extremas. El estimador de Huber combina sensibilidad a errores pequeños con menor penalización relativa a errores grandes \parencite{huber1964,penn_state_robust_regression}. En el contexto ICOCIV, esto es útil cuando una serie tiene choques puntuales que no deberían dominar completamente la tendencia. La implementación efectivamente ejecutada por SAVIP es \texttt{sklearn.linear\_model.HuberRegressor}, con \(\epsilon=1{,}35\), \(\alpha=0{,}0001\) y \texttt{max\_iter}\(=2000\) \parencite{sklearn_huberregressor}.
+
+La regresión robusta no debe interpretarse como mecanismo para ignorar eventos económicos. Si un outlier corresponde a un choque real de precios, el informe debe mencionarlo. La utilidad del modelo robusto está en ofrecer una alternativa de ajuste menos dependiente de valores extremos, especialmente cuando se compara su desempeño predictivo con modelos ordinarios.
+
+\subsection{Restricción de coherencia económica}
+
+Los índices de precios suelen mostrar tendencia creciente en contextos inflacionarios. Por ello, el software puede aplicar una restricción de monotonía no decreciente a la trayectoria proyectada cuando una caída sostenida resulte incoherente con el comportamiento económico observado. Esta restricción no significa que los precios nunca puedan bajar, sino que evita extrapolaciones estadísticamente posibles pero económicamente poco defendibles en un índice de costos acumulado.
+
+La restricción se justifica como regla de coherencia, no como prueba estadística. Debe documentarse en el informe para que el usuario entienda que la proyección combina ajuste matemático con una restricción económica explícita.

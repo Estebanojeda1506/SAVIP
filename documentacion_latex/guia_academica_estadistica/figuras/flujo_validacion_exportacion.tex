@@ -1,0 +1,50 @@
+﻿\begin{landscape}
+\begin{figure}[p]
+\centering
+\begin{adjustbox}{max width=\linewidth, max height=0.90\textheight}
+\begin{tikzpicture}[
+    node distance=0.58cm and 0.95cm,
+    paso/.style={rectangle, rounded corners=2pt, draw=black!70, fill=blue!5, align=center, minimum width=3.45cm, minimum height=0.72cm, font=\scriptsize},
+    bloque/.style={rectangle, rounded corners=2pt, draw=black!75, fill=green!7, align=center, minimum width=4.55cm, minimum height=0.84cm, font=\scriptsize},
+    decision/.style={rectangle, rounded corners=2pt, draw=black!75, fill=orange!10, align=center, minimum width=4.35cm, minimum height=0.84cm, font=\scriptsize},
+    flecha/.style={-{Latex[length=2mm]}, thick}
+]
+\node[paso] (bt) {Backtesting walk-forward};
+\node[paso, below=of bt] (reestima) {Reestimación del modelo\\en cada origen \(r\)};
+\node[paso, below=of reestima] (proyh) {Proyección por horizonte \(h\)};
+\node[paso, below=of proyh] (errores) {Cálculo de errores\\\(e_{r,h}\)};
+\node[bloque, below=of errores] (metricas) {Métricas por horizonte\\MAE, RMSE, MAPE, sMAPE, MASE,\\sesgo y errores extremos};
+
+\node[paso, right=of bt] (bench) {Comparación contra benchmarks\\Naive y Drift};
+\node[paso, below=of bench] (intervalos) {Evaluación de intervalos\\intervalo del 95\,\% y ancho relativo};
+\node[paso, below=of intervalos] (seleccion) {Selección del modelo};
+\node[paso, below=of seleccion] (clasifica) {Clasificación de horizontes};
+\node[paso, below=of clasifica] (hmax) {Recomendado, escenario,\\evaluado y primer no viable};
+\node[decision, below=of hmax] (pocofiable) {¿El horizonte solicitado\\es admisible?};
+
+\node[paso, right=of bench] (proyfinal) {Generar o negar\\la proyección solicitada};
+\node[paso, below=of proyfinal] (pdf) {Exportación PDF, DOCX y HTML};
+\node[paso, below=of pdf] (csv) {Exportación CSV reproducible};
+\node[paso, below=of csv] (fin) {Fin};
+
+\draw[flecha] (bt) -- (reestima);
+\draw[flecha] (reestima) -- (proyh);
+\draw[flecha] (proyh) -- (errores);
+\draw[flecha] (errores) -- (metricas);
+\draw[flecha] (metricas.east) -- ++(0.35,0) |- (bench.west);
+\draw[flecha] (bench) -- (intervalos);
+\draw[flecha] (intervalos) -- (seleccion);
+\draw[flecha] (seleccion) -- (clasifica);
+\draw[flecha] (clasifica) -- (hmax);
+\draw[flecha] (hmax) -- (pocofiable);
+\draw[flecha] (pocofiable.east) -- ++(0.35,0) |- (proyfinal.west);
+\draw[flecha] (proyfinal) -- (pdf);
+\draw[flecha] (pdf) -- (csv);
+\draw[flecha] (csv) -- (fin);
+\end{tikzpicture}
+\end{adjustbox}
+\par\footnotesize\textit{Fuente: Elaboración propia. Diagrama de lógica metodológica interna de la aplicación, construido con base en la validación temporal y los criterios documentados en el informe.}\par\normalsize
+\caption{Flujo de validación walk-forward, selección del modelo y exportación de resultados.}
+\label{fig:flujo_validacion_exportacion}
+\end{figure}
+\end{landscape}

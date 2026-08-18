@@ -1,0 +1,341 @@
+% =====================================================================
+% AVISO DE VIGENCIA -- 15-08-2026
+%
+% ESTE ANEXO NO SE COMPILA EN `main.tex` Y ESTA SUPERADO EN PARTE.
+%
+% Describe el flujo estadistico tal como era ANTES de las remediaciones
+% P0-B, P0-C, P0-G y P0-H. En concreto, ya no son vigentes:
+%
+%   * la activacion de modelos "por niveles" (retirada en P0-B);
+%   * los umbrales de ventanas 6 / 3 usados como VETO: desde P0-G no vetan,
+%     se comunican como advertencia y no cancelan el pronostico puntual;
+%   * la regla de prefijo -- "un horizonte solo es defendible si todos los
+%     anteriores lo son" -- retirada en P0-H: ninguna fuente exige que los
+%     horizontes validos formen un prefijo;
+%   * cualquier mencion a "proyeccion tecnica validada" o a "certificar" un
+%     horizonte: no existe ninguna validacion en ese sentido;
+%   * la publicacion del intervalo de prediccion, retirada en P0-C / C2, junto
+%     con su ancho relativo, su cobertura y los tres tramos que aparecen mas
+%     abajo: ninguno clasifica ni bloquea nada;
+%   * el AJUSTE de cambio de anio (gamma y el factor f_h), retirado en P0-F el
+%     12-08-2026: `aplicado = False` de forma incondicional. El patron se sigue
+%     midiendo y publicando como diagnostico descriptivo, pero NO modifica el
+%     pronostico. Su incorporacion predictiva queda como trabajo futuro.
+%
+% El estado vigente esta en el capitulo correspondiente de `main.tex` y en
+% `tabla_criterios_auditable.tex`. Este anexo se conserva como registro
+% historico del diseno anterior; no debe citarse como descripcion actual.
+% =====================================================================
+
+% Flujo estadistico de la aplicacion ICOCIV, paso a paso.
+% Documento autocontenido: compila por si solo con pdflatex.
+% Para integrarlo en el documento final, copie o \input el contenido que va
+% desde \section{Proposito} hasta el final, omitiendo el preambulo.
+\documentclass[11pt,letterpaper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-noquoting]{babel}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{hyperref}
+
+\title{Flujo estadístico de la aplicación ICOCIV\\\large Explicación paso a paso}
+\author{Proyecto ICOCIV / ICCP--ICOCIV}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{Propósito}
+
+Este anexo explica, paso a paso, qué hace la aplicación en su componente
+estadístico: desde la selección de una ruta jerárquica ICOCIV hasta la
+generación, advertencia o negación de una proyección. El objetivo es que un
+lector técnico pueda auditar cada decisión y reproducirla.
+
+La aplicación \textbf{apoya} el criterio técnico del profesional responsable;
+\textbf{no lo reemplaza}. Ninguna salida sustituye la validación del ingeniero
+ni la producción estadística oficial del DANE.
+
+\section{Pasos del flujo}
+
+\begin{longtable}{@{}p{0.5cm}p{4.6cm}p{9.4cm}@{}}
+\toprule
+\textbf{\#} & \textbf{Paso} & \textbf{Qué hace la aplicación} \\
+\midrule
+\endhead
+1 & Selección de ruta ICOCIV & El usuario recorre grupo de obra, subclase CPC, tipología, capítulo, grupo de costos e insumo. La ruta determina la tabla y la fila fuente del anexo. \\
+2 & Extracción de la serie & Se localiza la fila fuente y se leen las columnas de periodos mensuales, conservando la trazabilidad de origen. \\
+3 & Normalización temporal & Los periodos se convierten a una secuencia mensual ordenada (AAAA--MM) y se ordena cronológicamente. \\
+4 & Validación de calidad & Se revisan longitud, continuidad, duplicados, faltantes, valores no numéricos y valores no positivos. \\
+5 & Análisis descriptivo & Media, mediana, mínimo, máximo, desviación y coeficiente de variación del nivel del índice. \\
+6 & Variaciones & Variación mensual y variación acumulada entre extremos de la serie. \\
+7 & Detección de atípicos & Puntaje modificado con mediana y MAD sobre las variaciones. Se \emph{reportan}; no se eliminan ni se imputan valores oficiales. \\
+8 & Modelos candidatos & Activación progresiva por niveles según longitud, horizonte y diagnóstico. \\
+9 & Backtesting walk-forward & Ventana expansiva: en cada origen se reentrena solo con datos anteriores y se pronostica el horizonte objetivo. \\
+10 & Métricas de error & MAE, RMSE, MAPE, sMAPE, MASE, sesgo medio, estabilidad y porcentaje de errores extremos, por modelo y por horizonte. \\
+11 & Comparación de modelos & Cada candidato se contrasta contra los benchmarks Naive y Drift mediante errores relativos. \\
+12 & Horizonte recomendado & Último horizonte consecutivo clasificado como proyección técnica (terminología anterior a P0-G; no implica validación). \\
+13 & Horizonte admisible & Último horizonte consecutivo aceptable al menos como escenario. \\
+14 & Decisión & Se genera la proyección, se genera como escenario con advertencia, o se niega indicando la causa. \\
+15 & Presentación & Tarjetas de resultado, tabla por horizonte, serie, fila fuente y gráfica interactiva. \\
+16 & Exportación & Informe DOCX y PDF, CSV reproducible y Excel acumulativo, con la misma trazabilidad. \\
+\bottomrule
+\end{longtable}
+
+\section{Fórmulas principales}
+
+\subsection{Variaciones}
+\begin{equation}
+v_t=\frac{y_t-y_{t-1}}{y_{t-1}}\times 100,
+\qquad
+v_{\text{acum}}=\frac{y_T-y_1}{y_1}\times 100 .
+\end{equation}
+
+\subsection{Detección robusta de atípicos}
+Con mediana \(\tilde{v}\) y desviación absoluta mediana \(\mathrm{MAD}\):
+\begin{equation}
+M_i=\frac{0{,}6745\,(v_i-\tilde{v})}{\mathrm{MAD}},
+\qquad \text{se marca si } |M_i|>3{,}5 .
+\end{equation}
+
+\subsection{Backtesting walk-forward}
+Para cada origen \(r\) y horizonte \(h\), el modelo se reestima con
+\(\{y_1,\dots,y_r\}\) y se compara \(\hat y_{r+h|r}\) contra \(y_{r+h}\):
+\begin{equation}
+e_{r,h}=y_{r+h}-\hat y_{r+h|r}.
+\end{equation}
+Este orden garantiza que nunca se use información futura.
+
+\subsection{Métricas por horizonte}
+Con \(m\) orígenes válidos:
+\begin{align}
+\mathrm{MAE}_h&=\frac{1}{m}\sum_r |e_{r,h}|, &
+\mathrm{RMSE}_h&=\sqrt{\frac{1}{m}\sum_r e_{r,h}^{2}},\\
+\mathrm{MAPE}_h&=\frac{100}{m}\sum_r\left|\frac{e_{r,h}}{y_{r+h}}\right|, &
+\mathrm{sMAPE}_h&=\frac{100}{m}\sum_r\frac{2|e_{r,h}|}{|y_{r+h}|+|\hat y_{r+h|r}|}.
+\end{align}
+El MASE escala cada error con la referencia \emph{naive} calculada
+\textbf{dentro de la ventana de entrenamiento} de cada origen, de modo que la
+escala nunca incorpora información del tramo evaluado:
+\begin{equation}
+\mathrm{MASE}_h=\frac{1}{m}\sum_r \frac{|e_{r,h}|}{s_r},
+\qquad
+s_r=\frac{1}{r-1}\sum_{t=2}^{r}|y_t-y_{t-1}| .
+\end{equation}
+
+\subsection{Selección del modelo de la trayectoria}
+\label{sec:modelo}
+
+El backtesting produce un modelo ganador \emph{para cada horizonte}. Si la
+trayectoria se generara con el ganador del horizonte solicitado, los primeros
+meses cambiarían según lo que pidiera el usuario: para una misma serie, el mes
+siguiente al último dato podía diferir en más de un 2\,\% entre una solicitud a
+3 meses y otra a 18. Eso es indeseable, porque el ajuste al comportamiento
+histórico no depende de hasta dónde se quiera proyectar.
+
+Por eso se elige \textbf{un único modelo por serie} para toda la trayectoria.
+Cada modelo \(k\) se puntúa por su RMSE relativo al mejor de cada horizonte,
+ponderando cada horizonte por \(1/h\):
+
+\begin{equation}
+S_k=\frac{\displaystyle\sum_{h}\frac{1}{h}\cdot\frac{\mathrm{RMSE}_{k,h}}{\min_j \mathrm{RMSE}_{j,h}}}
+{\displaystyle\sum_{h}\frac{1}{h}},
+\qquad
+k^{*}=\arg\min_k S_k .
+\end{equation}
+
+La ponderación \(1/h\) refleja que el error crece con el horizonte y que la
+evidencia de corto plazo es más confiable y más consultada; sin ella, un modelo
+mediocre pero parejo en horizontes largos puede desplazar a otro que domina en
+el tramo corto. Solo compiten modelos evaluados en todos los horizontes.
+
+El conjunto de horizontes evaluados depende únicamente de la longitud de la
+serie, de modo que \(k^{*}\) ---y por tanto los primeros valores
+proyectados--- es una propiedad de la serie y no de la solicitud del usuario.
+
+El modelo \(k^{*}\) se fija \emph{antes} de evaluar los horizontes, de manera
+que la clasificación de admisibilidad, las métricas reportadas, los intervalos
+y la trayectoria correspondan todos al mismo modelo. La admisibilidad se sigue
+decidiendo horizonte por horizonte, pero siempre con \(k^{*}\): así se evita
+informar un modelo en la trayectoria y sustentar la advertencia en otro.
+
+La combinación ponderada de varios modelos se evaluó y se descartó: sus pesos
+por horizonte reintroducían la dependencia respecto del horizonte solicitado, y
+la variante de pesos fijos por serie no mejoró al modelo único al medirla sin
+fuga de información.
+
+\subsection{Comparación contra benchmarks}
+\begin{equation}
+\mathrm{rRMSE}_{\text{naive}}=\frac{\mathrm{RMSE}_{\text{modelo}}}{\mathrm{RMSE}_{\text{naive}}},
+\end{equation}
+y de forma análoga frente a Drift. Un valor menor o igual que 1 indica que el
+modelo iguala o mejora la referencia simple.
+
+\subsection{Intervalos de predicción}
+Se priorizan los errores fuera de muestra del mismo horizonte, usando
+percentiles empíricos (2{,}5/97{,}5 para el intervalo del 95\%). Cuando la
+evidencia empírica no alcanza, se emplean cuantiles normales
+(\(1{,}2816\) y \(1{,}96\)). El ancho relativo del IC95 respecto al valor
+proyectado participa en la clasificación del horizonte.
+
+\section{Modelos candidatos}
+
+La aplicación evalúa únicamente modelos implementados y verificables:
+
+\begin{itemize}
+  \item \textbf{Benchmarks:} Naive, Drift, promedio móvil y variación reciente.
+  \item \textbf{Suavizamiento:} Holt lineal y Holt con tendencia amortiguada, ambos con coeficientes fijos declarados. ETS no forma parte del catálogo de modelos ejecutados; la decisión de alcance se documenta en el capítulo de pruebas.
+  \item \textbf{Regresiones interpretables:} lineal, logarítmica temporal, exponencial/log-lineal y robusta de Huber.
+  \item \textbf{Modelos sobre variación:} variación mensual y log-variación.
+\end{itemize}
+
+La combinación ponderada de modelos fue evaluada y \textbf{descartada}; la
+proyección usa siempre un único modelo por serie (ver \S\ref{sec:modelo}).
+
+La activación es progresiva: el nivel 1 (benchmarks y Holt) siempre está
+disponible y el nivel 2 se habilita según longitud, horizonte, volatilidad y
+presencia de atípicos. Un modelo que falla al ajustarse se descarta con su
+motivo registrado y no contamina la decisión final.
+
+\section{Criterios de decisión}
+
+\begin{longtable}{@{}p{4.3cm}p{2.4cm}p{7.8cm}@{}}
+\toprule
+\textbf{Criterio} & \textbf{Umbral} & \textbf{Efecto} \\
+\midrule
+\endhead
+Longitud mínima para modelar & 8 observaciones & Por debajo no se modela. \\
+Advertencia por longitud & 18 observaciones & Se modela con advertencia. \\
+Longitud recomendada & 24 observaciones & Referencia de buena práctica. \\
+Primer origen de la validación temporal & \(N_0=\max_m N_{\min}(m)\) (hoy 6) & Define cuántos orígenes quedan disponibles. Corresponde al máximo de los mínimos operativos codificados; no es un mínimo de identificabilidad demostrado. Se deriva de la estimabilidad de los modelos, no de una proporción. \\
+Ventanas para \textbf{proyección técnica} & \(\geq 6\) & Umbral anterior a P0-G; desde entonces no veta, se comunica como advertencia. \\
+Ventanas para \textbf{escenario} & \(\geq 3\) y \(< 6\) & Evidencia reducida: se calcula con advertencia. Desde P0-G no impide publicar el pronóstico puntual. \\
+Ventanas insuficientes & \(< 3\) & No se evalúa el horizonte; se niega indicando la causa. \\
+Atípico robusto & \(|M_i|>3{,}5\) & Se reporta como advertencia; no bloquea por sí solo. \\
+MAPE extremo & \(> 25\%\) & Bloquea el horizonte. \\
+sMAPE extremo & \(> 30\%\) & Bloquea el horizonte. \\
+Errores extremos recurrentes & \(\geq 50\%\) de ventanas & Bloquea el horizonte. \\
+Desempeño frente a benchmark & \(\mathrm{rRMSE}>1{,}25\) & Bloquea el horizonte. \\
+Ancho relativo IC95 & Ver cuadro & Tres tramos por horizonte: aceptable, escenario con advertencia y bloqueo. \\
+MASE \(>1\) & --- & Advertencia auxiliar; no bloquea por sí sola. \\
+\bottomrule
+\end{longtable}
+
+\subsection{Amplitud de los intervalos por horizonte}
+
+El ancho relativo del IC95 respecto al valor proyectado se compara con tres
+umbrales que crecen con el horizonte, porque la incertidumbre legítima aumenta
+al alejarse en el tiempo:
+
+\begin{center}
+\begin{tabular}{@{}cccc@{}}
+\toprule
+\textbf{Horizonte} & \textbf{Aceptable} & \textbf{Escenario} & \textbf{Bloqueo} \\
+\midrule
+\(h\leq 3\)  & \(\leq 10\%\) & \(10\%\)--\(30\%\) & \(>30\%\) \\
+\(h\leq 6\)  & \(\leq 20\%\) & \(20\%\)--\(40\%\) & \(>40\%\) \\
+\(h\leq 12\) & \(\leq 30\%\) & \(30\%\)--\(50\%\) & \(>50\%\) \\
+\(h\leq 18\) & \(\leq 40\%\) & \(40\%\)--\(55\%\) & \(>55\%\) \\
+\(h> 18\)    & \(\leq 45\%\) & \(45\%\)--\(75\%\) & \(>75\%\) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+El tramo intermedio es esencial: un horizonte con intervalos amplios pero no
+desproporcionados se ofrece como \emph{escenario} con advertencia, en lugar de
+bloquearse. Sin ese tramo, superar el umbral por un margen pequeño anulaba el
+horizonte y, por el encadenamiento descrito abajo, también todos los
+posteriores.
+
+\subsection{Horizonte recomendado y horizonte admisible}
+
+Ambos se calculan recorriendo los horizontes de forma \emph{consecutiva} desde
+\(h=1\), porque un horizonte solo es defendible si todos los anteriores lo son:
+
+\begin{itemize}
+  \item \textbf{Máximo recomendado:} último \(h\) consecutivo clasificado como proyección técnica (terminología anterior a P0-G).
+  \item \textbf{Máximo admisible:} último \(h\) consecutivo aceptable al menos como escenario.
+\end{itemize}
+
+No son sinónimos y la aplicación los reporta por separado. Los accesos rápidos
+de la interfaz (1, 3, 6, 12, 18 meses) son atajos de solicitud y no constituyen
+un límite estadístico.
+
+\section{Ejemplo conceptual con horizonte de 3 meses}
+
+Sea una serie mensual con \(n=24\) observaciones. El primer origen no se fija
+con una proporción sino que se \emph{deriva}: es el mayor de los mínimos de
+observaciones que exigen los modelos que compiten. Con el catálogo actual ese
+máximo lo impone Holt con tendencia amortiguada, cuyos cinco parámetros
+---\(\alpha\), \(\beta^{*}\), \(\varphi\), \(\ell_0\) y \(b_0\)--- quedan
+identificados a partir de la sexta observación, de modo que \(N_0=6\). El
+número de orígenes disponibles para un horizonte \(h\) es entonces
+\begin{equation}
+m(h)=n-N_0-h+1=24-6-h+1=19-h .
+\end{equation}
+
+\begin{center}
+\begin{tabular}{@{}ccl@{}}
+\toprule
+\textbf{h} & \textbf{Orígenes \(m(h)\)} & \textbf{Clasificación} \\
+\midrule
+1 & 18 & Proyección técnica (\(m\geq 6\), criterio anterior a P0-G) \\
+3 & 16 & Proyección técnica (\(m\geq 6\), criterio anterior a P0-G) \\
+13 & 6 & Proyección técnica (\(m\geq 6\), criterio anterior a P0-G) \\
+15 & 4 & Escenario con advertencia (\(3\leq m<6\)) \\
+17 & 2 & No evaluable: sin ventanas suficientes \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Con este esquema, una solicitud de 3 meses \textbf{sí produce} una proyección.
+Una solicitud de 17 meses se niega sobre una serie de 24 observaciones, y el
+mensaje indica la causa real: no existen ventanas de validación suficientes, no
+un mal desempeño del modelo.
+
+Conviene señalar el efecto del cambio de criterio. Con la regla anterior
+---una proporción del 60\,\% con mínimo de 18 observaciones, ninguno de los dos
+valores respaldado por fuente--- esa misma serie de 24 observaciones dejaba
+\(m(h)=7-h\) orígenes y negaba ya el horizonte de 5 meses. Derivar el primer
+origen de la estimabilidad no relaja ningún umbral de error: \textbf{aumenta la
+evidencia disponible} y, con ella, el número de horizontes que llegan a
+evaluarse. Los umbrales de error se mantienen intactos.
+
+Es importante subrayar la diferencia metodológica: que un horizonte
+\emph{no se pueda medir} con el rigor exigido no equivale a que el modelo
+\emph{haya fallado}. Los umbrales de error (MAPE, sMAPE, errores extremos y
+comparación con benchmarks) se mantienen sin relajar en todos los niveles.
+
+\section{Caso de insumos específicos}
+
+Las rutas que descienden hasta un insumo concreto ---por ejemplo
+\textit{Concreto simple} dentro del capítulo \textit{Estructura placa huella y
+drenajes}--- se procesan con exactamente el mismo flujo que las series
+agregadas: no existe ningún filtro ni umbral distinto por nivel de la
+jerarquía. La diferencia práctica proviene de los datos, no del método:
+
+\begin{itemize}
+  \item Un insumo con historia completa se comporta como cualquier serie agregada y admite proyección técnica en horizontes cortos.
+  \item Un insumo incorporado tardíamente al anexo tiene menos observaciones válidas; al reducirse \(n\), se reduce el número de orígenes y el horizonte máximo certificable.
+  \item Los insumos suelen presentar mayor volatilidad relativa que los agregados, por lo que es más frecuente que aparezcan advertencias de atípicos o de amplitud de intervalos.
+\end{itemize}
+
+Por eso la aplicación reporta siempre, junto al resultado, el número de
+observaciones, el periodo cubierto, el entrenamiento inicial y el número de
+ventanas de validación: son los datos que explican por qué un horizonte se
+certifica, se ofrece como escenario o se niega.
+
+\section{Alcance y limitaciones}
+
+\begin{itemize}
+  \item La calidad del resultado depende de la serie, la ruta y el periodo seleccionados.
+  \item Los intervalos comunican incertidumbre estadística; no garantizan valores futuros.
+  \item La aplicación no recalcula canastas, ponderaciones ni índices oficiales.
+  \item Toda selección contractual y toda equivalencia requieren la justificación del profesional responsable.
+\end{itemize}
+
+\end{document}

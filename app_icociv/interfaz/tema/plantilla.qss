@@ -1,0 +1,927 @@
+/* Hoja de estilos de SAVIP.
+ *
+ * No contiene ni un solo color ni medida literal: todo se expresa con
+ * marcadores de token que resuelve tema/estilos.py contra la paleta activa.
+ * Anadir un color nuevo aqui sin registrarlo como token hace fallar la prueba
+ * tests/test_interfaz_tema.py, que es justamente lo que se busca.
+ * Las llaves de las reglas van duplicadas porque la plantilla se resuelve con
+ * str.format: una llave simple delimita un token.
+ */
+
+/* ============ BASE ============ */
+
+QMainWindow, QDialog {{
+    background: {fondo};
+}}
+
+QWidget {{
+    color: {texto};
+    font-family: {familia_interfaz};
+    font-size: {tamano_cuerpo}pt;
+}}
+
+QToolTip {{
+    background: {superficie_inversa};
+    color: {texto_inverso};
+    border: none;
+    border-radius: {radio_pequeno}px;
+    padding: {espacio_2}px {espacio_3}px;
+}}
+
+/* ============ CABECERA ============ */
+
+QFrame#cabecera_app {{
+    background: {cabecera_fondo};
+    border: none;
+    border-bottom: {grosor_borde}px solid {separador};
+}}
+
+QLabel#cabecera_titulo {{
+    color: {texto};
+    font-family: {familia_titulo};
+    font-size: {tamano_subtitulo}pt;
+    font-weight: {peso_fuerte};
+}}
+
+QLabel#cabecera_vista {{
+    color: {texto_secundario};
+    font-size: {tamano_secundario}pt;
+}}
+
+QLabel#cabecera_estado {{
+    color: {texto_secundario};
+    background: {superficie_3};
+    border-radius: {radio_pildora}px;
+    padding: {espacio_1}px {espacio_3}px;
+    font-size: {tamano_secundario}pt;
+}}
+
+QLabel#cabecera_estado[estado="cargado"] {{
+    color: {principal};
+    background: {principal_suave};
+    font-weight: {peso_medio};
+}}
+
+QLabel#cabecera_estado[estado="advertencia"] {{
+    color: {advertencia};
+    background: {advertencia_suave};
+}}
+
+/* ============ NAVEGACIÓN LATERAL ============ */
+
+QFrame#navegacion_lateral {{
+    background: {barra_lateral};
+    border: none;
+    border-right: {grosor_borde}px solid {borde};
+}}
+
+/* El area desplazable y su contenido necesitan fondo propio: sin estas reglas
+ * heredan la paleta del sistema y el panel sale negro en tema claro. */
+QScrollArea#navegacion_scroll {{
+    background: {barra_lateral};
+    border: none;
+}}
+
+QScrollArea#navegacion_scroll > QWidget > QWidget {{
+    background: {barra_lateral};
+}}
+
+QPushButton#boton_navegacion {{
+    background: transparent;
+    color: {texto_secundario};
+    border: none;
+    border-radius: {radio_medio}px;
+    padding: {espacio_2}px {espacio_3}px;
+    min-height: {altura_fila_navegacion}px;
+    text-align: left;
+    font-size: {tamano_cuerpo}pt;
+}}
+
+QPushButton#boton_navegacion:hover {{
+    background: {navegacion_hover};
+    color: {texto};
+}}
+
+QPushButton#boton_navegacion:checked {{
+    background: {navegacion_seleccionada};
+    color: {principal};
+    font-weight: {peso_medio};
+}}
+
+QPushButton#boton_navegacion:focus {{
+    border: {grosor_borde_foco}px solid {foco};
+}}
+
+QLabel#nav_grupo {{
+    color: {texto_terciario};
+    font-size: {tamano_micro}pt;
+    font-weight: {peso_medio};
+    padding: 0 {espacio_3}px;
+}}
+
+QLabel#nav_archivo {{
+    color: {texto_secundario};
+    background: {campo};
+    border: {grosor_borde}px solid {borde};
+    border-radius: {radio_pequeno}px;
+    padding: {espacio_2}px {espacio_3}px;
+    font-size: {tamano_secundario}pt;
+}}
+
+QPushButton#boton_contraer_navegacion {{
+    background: transparent;
+    color: {texto_terciario};
+    border: none;
+    border-radius: {radio_pequeno}px;
+    padding: {espacio_1}px;
+}}
+
+QPushButton#boton_contraer_navegacion:hover {{
+    background: {hover_superficie};
+    color: {texto};
+}}
+
+/* ============ AREAS DE DESPLAZAMIENTO ============ */
+
+/* Regla general y deliberadamente amplia: un QScrollArea sin fondo declarado
+ * hereda la paleta del sistema, que en Windows con tema oscuro es negra, y el
+ * modulo entero sale en negro sobre el tema claro. Cubre tambien los scroll que
+ * crean los widgets de Proyecciones y Empalme, que no tienen nombre propio. */
+QScrollArea {{
+    background: {fondo};
+    border: none;
+}}
+
+QScrollArea > QWidget > QWidget {{
+    background: {fondo};
+}}
+
+/* ============ PANELES Y SUPERFICIES ============ */
+
+QFrame#panel_controles, QScrollArea#panel_scroll {{
+    background: {superficie};
+    border: none;
+    border-right: {grosor_borde}px solid {borde};
+}}
+
+QScrollArea#panel_scroll > QWidget > QWidget {{
+    background: {superficie};
+}}
+
+QFrame#dashboard_principal {{
+    background: {fondo};
+}}
+
+QFrame#dashboard_cabecera {{
+    background: {superficie};
+    border: none;
+    border-radius: {radio_grande}px;
+}}
+
+QFrame#tarjeta, TarjetaInteractiva#tarjeta_kpi {{
+    background: {superficie};
+    border: none;
+    border-radius: {radio_grande}px;
+}}
+
+TarjetaInteractiva#tarjeta_kpi {{
+    min-height: {tarjeta_kpi_min_altura}px;
+}}
+
+TarjetaInteractiva#tarjeta_kpi:hover {{
+    background: {superficie_2};
+}}
+
+TarjetaInteractiva#tarjeta_kpi:focus {{
+    border: {grosor_borde_foco}px solid {foco};
+}}
+
+QLabel#titulo_dashboard {{
+    color: {texto};
+    font-family: {familia_titulo};
+    font-size: {tamano_titulo}pt;
+    font-weight: {peso_fuerte};
+}}
+
+QLabel#ruta_dashboard {{
+    color: {texto_secundario};
+    font-size: {tamano_secundario}pt;
+}}
+
+QLabel#estado_dashboard {{
+    color: {principal};
+    font-weight: {peso_medio};
+}}
+
+QLabel#etiqueta_kpi {{
+    color: {texto_secundario};
+    font-size: {tamano_secundario}pt;
+}}
+
+QLabel#valor_kpi {{
+    color: {texto};
+    font-family: {familia_numerica};
+    font-size: {tamano_metrica}pt;
+    font-weight: {peso_fuerte};
+}}
+
+QLabel#accion_kpi {{
+    color: {principal};
+    font-size: {tamano_micro}pt;
+    font-weight: {peso_medio};
+}}
+
+QLabel#titulo_seccion {{
+    color: {texto};
+    font-family: {familia_titulo};
+    font-size: {tamano_subtitulo}pt;
+    font-weight: {peso_fuerte};
+}}
+
+QLabel#descripcion_seccion {{
+    color: {texto_secundario};
+    font-size: {tamano_secundario}pt;
+}}
+
+/* ============ IDENTIDAD ============ */
+
+QLabel#titulo_app {{
+    font-family: {familia_titulo};
+    font-size: {tamano_display}pt;
+    font-weight: {peso_fuerte};
+    color: {texto};
+}}
+
+QLabel#subtitulo_app {{
+    font-size: {tamano_secundario}pt;
+    color: {texto_secundario};
+    line-height: {interlineado_comodo};
+}}
+
+QLabel#estado {{
+    color: {texto_secundario};
+}}
+
+QLabel#tabla_activa {{
+    background: {principal_suave};
+    color: {principal};
+    border: none;
+    border-radius: {radio_pequeno}px;
+    padding: {espacio_2}px {espacio_3}px;
+    font-weight: {peso_medio};
+}}
+
+QScrollArea#ruta_scroll {{
+    background: {campo};
+    color: {texto_secundario};
+    border: {grosor_borde}px solid {borde};
+    border-radius: {radio_medio}px;
+}}
+
+QScrollArea#ruta_scroll > QWidget > QWidget {{
+    background: {campo};
+}}
+
+QLabel#ruta_jerarquica {{
+    background: {campo};
+    color: {texto_secundario};
+    border: none;
+    padding: {espacio_2}px {espacio_3}px;
+    line-height: {interlineado_comodo};
+}}
+
+QLabel#horizonte_recomendado {{
+    background: {campo};
+    color: {texto_secundario};
+    border: {grosor_borde}px solid {borde};
+    border-radius: {radio_medio}px;
+    padding: {espacio_2}px {espacio_3}px;
+}}
+
+/* ============ BOTONES ============ */
+
+QPushButton {{
+    background: {principal};
+    color: {texto_sobre_principal};
+    border: none;
+    border-radius: {radio_medio}px;
+    min-height: {altura_boton}px;
+    min-width: {ancho_minimo_boton}px;
+    padding: {espacio_2}px {espacio_4}px;
+    font-weight: {peso_medio};
+}}
+
+QPushButton:hover {{
+    background: {acento_hover};
+}}
+
+QPushButton:pressed {{
+    background: {acento_presionado};
+    padding-top: {espacio_2}px;
+}}
+
+QPushButton:focus {{
+    border: {grosor_borde_foco}px solid {foco};
+}}
+
+QPushButton:disabled {{
+    background: {deshabilitado};
+    color: {texto_deshabilitado};
+}}
+
+QPushButton#boton_secundario {{
+    background: {superficie};
+    color: {principal};
+    border: {grosor_borde}px solid {borde_control};
+}}
+
+QPushButton#boton_secundario:hover {{
+    background: {principal_suave};
+    border-color: {principal};
+}}
+
+QPushButton#boton_secundario:disabled {{
+    background: {deshabilitado};
+    color: {texto_deshabilitado};
+    border-color: {borde};
+}}
+
+QPushButton#boton_terciario {{
+    background: transparent;
+    color: {principal};
+    border: none;
+    min-width: 0px;
+}}
+
+QPushButton#boton_terciario:hover {{
+    background: {hover_superficie};
+}}
+
+QToolButton#boton_exportar_informe {{
+    background: {principal};
+    color: {texto_sobre_principal};
+    border: none;
+    border-radius: {radio_medio}px;
+    min-height: {altura_boton}px;
+    padding: {espacio_2}px {espacio_4}px;
+    font-weight: {peso_medio};
+}}
+
+QToolButton#boton_exportar_informe:hover {{
+    background: {principal_intenso};
+}}
+
+QToolButton#boton_exportar_informe:disabled {{
+    background: {deshabilitado};
+    color: {texto_deshabilitado};
+}}
+
+QToolButton#boton_exportar_informe::menu-indicator {{
+    image: none;
+    width: 0;
+}}
+
+QPushButton#boton_zoom {{
+    background: {superficie};
+    color: {principal};
+    border: {grosor_borde}px solid {borde_control};
+    border-radius: {radio_pequeno}px;
+    font-size: {tamano_subtitulo}pt;
+    font-weight: {peso_fuerte};
+    min-width: 0px;
+    padding: 0;
+}}
+
+QPushButton#boton_zoom:hover {{
+    background: {principal_suave};
+    border-color: {principal};
+}}
+
+QPushButton#boton_incremento {{
+    background: {superficie};
+    color: {principal};
+    border: {grosor_borde}px solid {borde_control};
+    border-radius: {radio_pequeno}px;
+    font-weight: {peso_fuerte};
+    min-width: 0px;
+    padding: 0;
+}}
+
+QPushButton#boton_incremento:hover {{
+    background: {principal_suave};
+    border-color: {principal};
+}}
+
+QPushButton#boton_incremento:disabled {{
+    background: {deshabilitado};
+    border-color: {borde};
+    color: {texto_deshabilitado};
+}}
+
+#boton_tema {{
+    background: {superficie};
+    color: {texto_secundario};
+    border: {grosor_borde}px solid {borde_control};
+    border-radius: {radio_pildora}px;
+    padding: {espacio_1}px {espacio_3}px;
+    min-width: 0px;
+    min-height: {altura_control_compacto}px;
+    font-weight: {peso_medio};
+}}
+
+#boton_tema:hover {{
+    background: {hover_superficie};
+    color: {texto};
+}}
+
+#boton_tema:checked {{
+    background: {principal_suave};
+    color: {principal};
+    border-color: {principal};
+}}
+
+QPushButton#boton_cerrar_dialogo {{
+    min-width: {ancho_minimo_boton}px;
+}}
+
+/* ============ CONTROLES DE ENTRADA ============ */
+
+QComboBox, QSpinBox, QLineEdit, QDateEdit, QTextEdit#campo_texto {{
+    background: {campo};
+    color: {texto};
+    border: {grosor_borde}px solid {borde_control};
+    border-radius: {radio_medio}px;
+    min-height: {altura_control}px;
+    padding: {espacio_1}px {espacio_3}px;
+    selection-background-color: {seleccion};
+    selection-color: {texto};
+}}
+
+QComboBox:hover, QSpinBox:hover, QLineEdit:hover, QDateEdit:hover {{
+    background: {campo_hover};
+    border-color: {borde_fuerte};
+}}
+
+QComboBox:focus, QSpinBox:focus, QLineEdit:focus, QDateEdit:focus {{
+    border: {grosor_borde_foco}px solid {principal};
+}}
+
+QComboBox:disabled, QSpinBox:disabled, QLineEdit:disabled, QDateEdit:disabled {{
+    background: {deshabilitado};
+    color: {texto_deshabilitado};
+    border-color: {borde};
+}}
+
+QComboBox::drop-down {{
+    border: none;
+    width: {espacio_6}px;
+}}
+
+QComboBox QAbstractItemView {{
+    background: {campo};
+    color: {texto};
+    selection-background-color: {principal_suave};
+    selection-color: {principal};
+    border: {grosor_borde}px solid {borde};
+    border-radius: {radio_medio}px;
+    padding: {espacio_1}px;
+}}
+
+QComboBox QAbstractItemView::item {{
+    min-height: {altura_control_compacto}px;
+    padding: {espacio_1}px {espacio_2}px;
+    border-radius: {radio_pequeno}px;
+}}
+
+QComboBox QAbstractItemView::item:hover,
+QComboBox QAbstractItemView::item:selected {{
+    background: {principal_suave};
+    color: {principal};
+}}
+
+QCheckBox {{
+    color: {texto};
+    spacing: {espacio_2}px;
+    padding: {espacio_1}px 0;
+    min-height: {altura_control_compacto}px;
+}}
+
+QCheckBox::indicator {{
+    width: 18px;
+    height: 18px;
+    border: {grosor_borde_foco}px solid {borde_fuerte};
+    border-radius: {radio_pequeno}px;
+    background: {campo};
+}}
+
+QCheckBox::indicator:hover {{
+    border-color: {principal};
+    background: {principal_suave};
+}}
+
+QCheckBox::indicator:focus {{
+    border-color: {foco};
+}}
+
+QCheckBox::indicator:checked {{
+    border-color: {principal};
+    background: {principal};
+}}
+
+QCheckBox::indicator:checked:hover {{
+    border-color: {principal_intenso};
+    background: {principal_intenso};
+}}
+
+QCheckBox::indicator:disabled {{
+    border-color: {borde};
+    background: {deshabilitado};
+}}
+
+QGroupBox {{
+    background: {superficie_formulario};
+    border: {grosor_borde}px solid {borde};
+    border-radius: {radio_grande}px;
+    margin-top: {espacio_4}px;
+    padding: {espacio_4}px {espacio_3}px {espacio_3}px {espacio_3}px;
+    font-weight: {peso_medio};
+}}
+
+QGroupBox::title {{
+    color: {texto_secundario};
+    subcontrol-origin: margin;
+    left: {espacio_3}px;
+    padding: 0 {espacio_1}px;
+    font-size: {tamano_secundario}pt;
+    font-weight: {peso_medio};
+}}
+
+/* ============ PESTAÑAS ============ */
+
+QTabWidget::pane {{
+    border: none;
+    background: {fondo};
+    top: -1px;
+}}
+
+QTabWidget > QWidget {{
+    background: {fondo};
+}}
+
+QTabBar {{
+    background: transparent;
+}}
+
+QTabBar::tab {{
+    background: transparent;
+    color: {texto_secundario};
+    border: none;
+    border-radius: {radio_medio}px;
+    min-width: {ancho_minimo_boton}px;
+    padding: {espacio_2}px {espacio_4}px;
+    margin-right: {espacio_1}px;
+}}
+
+QTabBar::tab:hover {{
+    background: {hover_superficie};
+    color: {texto};
+}}
+
+QTabBar::tab:selected {{
+    background: {principal_suave};
+    color: {principal};
+    font-weight: {peso_medio};
+}}
+
+QTabBar::tab:focus {{
+    border: {grosor_borde_foco}px solid {foco};
+}}
+
+/* ============ TABLAS ============ */
+
+QTableView {{
+    background: {superficie};
+    alternate-background-color: {superficie_2};
+    color: {texto};
+    gridline-color: {borde};
+    selection-background-color: {seleccion};
+    selection-color: {texto};
+    border: {grosor_borde}px solid {borde};
+    border-radius: {radio_medio}px;
+    font-family: {familia_numerica};
+}}
+
+QTableView::item {{
+    padding: {espacio_1}px {espacio_2}px;
+    border: none;
+}}
+
+QTableView::item:hover {{
+    background: {hover_superficie};
+}}
+
+QTableView::item:selected {{
+    background: {seleccion};
+    color: {texto};
+}}
+
+QHeaderView {{
+    background: transparent;
+}}
+
+QHeaderView::section {{
+    background: {superficie_3};
+    color: {texto_secundario};
+    border: none;
+    border-bottom: {grosor_borde}px solid {borde};
+    border-right: {grosor_borde}px solid {borde};
+    padding: {espacio_2}px;
+    font-weight: {peso_medio};
+}}
+
+QHeaderView::section:hover {{
+    background: {principal_suave};
+    color: {principal};
+}}
+
+QTableCornerButton::section {{
+    background: {superficie_3};
+    border: none;
+}}
+
+/* ============ TEXTO ENRIQUECIDO ============ */
+
+QTextEdit, QTextBrowser {{
+    background: {campo};
+    color: {texto};
+    border: {grosor_borde}px solid {borde};
+    border-radius: {radio_grande}px;
+    padding: {espacio_3}px;
+    selection-background-color: {seleccion};
+    selection-color: {texto};
+}}
+
+QTextEdit#visor_resultados, QTextBrowser#visor_resultados {{
+    padding: 0;
+    border: none;
+    background: {fondo};
+    font-family: {familia_interfaz};
+}}
+
+QTextEdit:disabled, QTextBrowser:disabled {{
+    background: {deshabilitado};
+    color: {texto_deshabilitado};
+}}
+
+QTextBrowser#visor_explicacion {{
+    background: {superficie};
+    color: {texto};
+    border: {grosor_borde}px solid {borde};
+    border-radius: {radio_medio}px;
+    padding: {espacio_2}px;
+}}
+
+QDialog#dialogo_explicacion {{
+    background: {fondo};
+}}
+
+/* ============ MENÚS ============ */
+
+QMenuBar {{
+    background: {barra_lateral};
+    color: {texto};
+    border-bottom: {grosor_borde}px solid {borde};
+    padding: {espacio_1}px {espacio_2}px;
+}}
+
+QMenuBar::item {{
+    background: transparent;
+    color: {texto};
+    padding: {espacio_1}px {espacio_3}px;
+    border-radius: {radio_pequeno}px;
+}}
+
+QMenuBar::item:selected {{
+    background: {principal_suave};
+    color: {principal};
+}}
+
+QMenu {{
+    background: {barra_lateral};
+    color: {texto};
+    border: {grosor_borde}px solid {borde};
+    border-radius: {radio_medio}px;
+    padding: {espacio_1}px;
+}}
+
+QMenu::item {{
+    background: transparent;
+    color: {texto};
+    padding: {espacio_2}px {espacio_6}px;
+    border-radius: {radio_pequeno}px;
+}}
+
+QMenu::item:selected {{
+    background: {principal_suave};
+    color: {principal};
+}}
+
+QMenu::separator {{
+    height: {grosor_borde}px;
+    background: {borde};
+    margin: {espacio_1}px {espacio_2}px;
+}}
+
+/* ============ BARRAS DE DESPLAZAMIENTO ============ */
+
+QScrollBar:vertical {{
+    background: transparent;
+    width: {espacio_3}px;
+    margin: 0;
+}}
+
+QScrollBar::handle:vertical {{
+    background: {borde_control};
+    min-height: {espacio_7}px;
+    border-radius: {radio_pequeno}px;
+    margin: {espacio_1}px;
+}}
+
+QScrollBar::handle:vertical:hover {{
+    background: {borde_fuerte};
+}}
+
+QScrollBar:horizontal {{
+    background: transparent;
+    height: {espacio_3}px;
+    margin: 0;
+}}
+
+QScrollBar::handle:horizontal {{
+    background: {borde_control};
+    min-width: {espacio_7}px;
+    border-radius: {radio_pequeno}px;
+    margin: {espacio_1}px;
+}}
+
+QScrollBar::handle:horizontal:hover {{
+    background: {borde_fuerte};
+}}
+
+QScrollBar::add-line, QScrollBar::sub-line {{
+    height: 0;
+    width: 0;
+}}
+
+QScrollBar::add-page, QScrollBar::sub-page {{
+    background: transparent;
+}}
+
+/* ============ PROGRESO Y CARGA ============ */
+
+QProgressBar {{
+    background: {superficie_3};
+    color: {texto_secundario};
+    border: none;
+    border-radius: {radio_pequeno}px;
+    height: {espacio_2}px;
+    text-align: center;
+}}
+
+QProgressBar::chunk {{
+    background: {principal};
+    border-radius: {radio_pequeno}px;
+}}
+
+QFrame#velo_carga {{
+    background: {velo_fondo};
+    border: none;
+}}
+
+QFrame#panel_carga {{
+    background: {superficie};
+    border: none;
+    border-radius: {radio_grande}px;
+}}
+
+QLabel#texto_carga {{
+    color: {texto};
+    font-weight: {peso_medio};
+}}
+
+QLabel#detalle_carga {{
+    color: {texto_secundario};
+    font-size: {tamano_secundario}pt;
+}}
+
+/* ============ NOTIFICACIONES ============ */
+
+QFrame#notificacion {{
+    background: {superficie};
+    border: {grosor_borde}px solid {borde};
+    border-radius: {radio_medio}px;
+}}
+
+QFrame#notificacion[nivel="exito"] {{
+    background: {exito_suave};
+    border-color: {exito};
+}}
+
+QFrame#notificacion[nivel="advertencia"] {{
+    background: {advertencia_suave};
+    border-color: {advertencia};
+}}
+
+QFrame#notificacion[nivel="error"] {{
+    background: {error_suave};
+    border-color: {error};
+}}
+
+QFrame#notificacion[nivel="informacion"] {{
+    background: {informacion_suave};
+    border-color: {informacion};
+}}
+
+QLabel#notificacion_titulo {{
+    color: {texto};
+    font-weight: {peso_medio};
+}}
+
+QLabel#notificacion_detalle {{
+    color: {texto_secundario};
+    font-size: {tamano_secundario}pt;
+}}
+
+QPushButton#notificacion_cerrar {{
+    background: transparent;
+    color: {texto_terciario};
+    border: none;
+    min-width: 0px;
+    min-height: 0px;
+    padding: {espacio_1}px;
+}}
+
+QPushButton#notificacion_cerrar:hover {{
+    color: {texto};
+    background: {hover_superficie};
+}}
+
+/* ============ INICIO ============ */
+
+QFrame#inicio_portada {{
+    background: {superficie};
+    border: none;
+    border-radius: {radio_extra}px;
+}}
+
+QLabel#inicio_bienvenida {{
+    color: {texto};
+    font-family: {familia_titulo};
+    font-size: {tamano_display}pt;
+    font-weight: {peso_fuerte};
+}}
+
+QLabel#inicio_descripcion {{
+    color: {texto_secundario};
+    font-size: {tamano_subtitulo}pt;
+    line-height: {interlineado_comodo};
+}}
+
+QFrame#inicio_tarjeta_dato {{
+    background: {superficie_2};
+    border: none;
+    border-radius: {radio_medio}px;
+}}
+
+QLabel#inicio_dato_etiqueta {{
+    color: {texto_terciario};
+    font-size: {tamano_micro}pt;
+}}
+
+QLabel#inicio_dato_valor {{
+    color: {texto};
+    font-family: {familia_numerica};
+    font-size: {tamano_subtitulo}pt;
+    font-weight: {peso_medio};
+}}
+
+QLabel#inicio_version {{
+    color: {texto_terciario};
+    font-size: {tamano_micro}pt;
+}}
+
+/* ============ SEPARADORES ============ */
+
+QFrame#separador_horizontal {{
+    background: {borde};
+    border: none;
+    max-height: {grosor_borde}px;
+}}
+
+QSplitter::handle {{
+    background: transparent;
+}}
+
+QSplitter::handle:horizontal {{
+    width: {espacio_1}px;
+}}

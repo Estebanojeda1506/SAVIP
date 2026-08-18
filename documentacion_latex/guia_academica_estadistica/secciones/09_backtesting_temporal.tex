@@ -1,0 +1,95 @@
+\section{Backtesting temporal}
+
+\subsection{Propósito del backtesting}
+
+El backtesting evalúa cómo habría funcionado un modelo si se hubiese usado en el pasado para predecir periodos que en ese momento aún no se conocían. En forecasting de series temporales, este procedimiento es una forma de validación fuera de muestra que respeta el orden temporal \parencite{hyndman_tscv_2021,skforecast_backtesting_2026}.
+
+Su importancia radica en que el ajuste histórico puede ser engañoso. Un modelo puede describir muy bien toda la serie observada porque fue entrenado con todos los datos, pero fallar al anticipar nuevos periodos. El backtesting responde una pregunta más realista: con la información disponible hasta cierto mes, ¿qué tan bien habría proyectado el mes siguiente?
+
+\subsection{Por qué no se usa partición aleatoria}
+
+En aprendizaje estadístico general, es común dividir datos aleatoriamente en entrenamiento y prueba. Esa estrategia no es apropiada para series ICOCIV porque rompe la relación pasado-futuro. Si un dato de 2025 queda en entrenamiento y uno de 2023 en prueba, el modelo estaría usando información futura para evaluar el pasado. Esto produce fuga de información y sobreestima la capacidad predictiva.
+
+El escenario real del software es secuencial. En cada fecha, el analista solo dispone de datos publicados hasta ese momento. Por tanto, la validación debe simular esa condición.
+
+\subsection{Rolling Forecast Origin}
+
+El enfoque \textit{Rolling Forecast Origin} o \textit{Walk-Forward Validation} desplaza progresivamente el origen de pronóstico. La Tabla \ref{tab:walkforward_legacy} muestra una implementación conceptual con ventana expansiva:
+
+\begin{table}[H]
+\centering
+\caption{Esquema conceptual de validacion walk-forward con ventana expansiva}
+\label{tab:walkforward_legacy}
+\begin{tabular}{lll}
+\toprule
+\textbf{Iteración} & \textbf{Entrenamiento} & \textbf{Predicción} \\
+\midrule
+1 & \(2021\_1 \rightarrow 2024\_12\) & \(2025\_1\) \\
+2 & \(2021\_1 \rightarrow 2025\_1\) & \(2025\_2\) \\
+3 & \(2021\_1 \rightarrow 2025\_2\) & \(2025\_3\) \\
+\(\cdots\) & \(\cdots\) & \(\cdots\) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+En cada iteración, el modelo se ajusta con datos anteriores y predice el siguiente periodo. Luego se compara la predicción con el valor real observado. La precisión final se calcula promediando los errores de todas las iteraciones.
+
+\subsection{Ventana expansiva y ventana rodante}
+
+Existen dos estrategias principales:
+
+\begin{itemize}
+    \item \textbf{Ventana expansiva}: cada iteración incorpora todos los datos disponibles hasta el origen de pronóstico. Es útil cuando se desea aprovechar toda la historia.
+    \item \textbf{Ventana rodante}: mantiene un tamaño fijo de entrenamiento y descarta datos antiguos. Es útil cuando la serie puede tener cambios estructurales y los datos recientes son más representativos.
+\end{itemize}
+
+Para el software ICOCIV, la ventana expansiva es una elección razonable inicial porque las series disponibles no son extremadamente largas y la información histórica aporta contexto sobre la evolución del índice. Sin embargo, la ventana rodante puede considerarse en futuras versiones si se detectan cambios de régimen frecuentes.
+
+\subsection{Métricas de error predictivo}
+
+El backtesting genera pares \((y_i, \hat{y}_i)\), donde \(y_i\) es el valor real observado y \(\hat{y}_i\) es el valor predicho en una iteración histórica. A partir de esos pares se calculan métricas de precisión.
+
+\subsubsection{MAE}
+
+El error absoluto medio se define como:
+
+\begin{equation}
+    MAE = \frac{1}{n}\sum_{i=1}^{n}|y_i-\hat{y}_i|.
+    \label{eq:mae}
+\end{equation}
+
+El MAE mide el error promedio en unidades del índice. Es fácil de interpretar: si \(MAE = 0.8\), el modelo se equivocó en promedio 0.8 puntos del índice durante el backtesting.
+
+\subsubsection{RMSE}
+
+La raíz del error cuadrático medio se define como:
+
+\begin{equation}
+    RMSE = \sqrt{\frac{1}{n}\sum_{i=1}^{n}(y_i-\hat{y}_i)^2}.
+    \label{eq:rmse}
+\end{equation}
+
+El RMSE penaliza más los errores grandes. Es útil cuando interesa detectar modelos que fallan mucho en algunos periodos, aunque su error promedio absoluto parezca razonable.
+
+\subsubsection{MAPE}
+
+El error porcentual absoluto medio se define como:
+
+\begin{equation}
+    MAPE = \frac{100}{n}\sum_{i=1}^{n}\left|\frac{y_i-\hat{y}_i}{y_i}\right|.
+    \label{eq:mape}
+\end{equation}
+
+El MAPE expresa el error como porcentaje del valor observado, lo que facilita la comunicación técnica. Por ejemplo, un MAPE de 1.8\% indica que, durante el backtesting, el error absoluto promedio fue equivalente al 1.8\% del índice real. No obstante, puede ser problemático si los valores reales son cercanos a cero. En ICOCIV, al tratarse de índices base cercanos o superiores a 100, esa limitación suele ser menos crítica \parencite{hyndman_koehler2006}.
+
+\subsection{Uso del backtesting en selección de modelos}
+
+El software debe usar el backtesting como evidencia de capacidad predictiva real. Un modelo con menor AICc pero peor MAPE puede no ser la mejor opción práctica. De manera similar, un modelo con alto \(R^2\) y errores fuera de muestra grandes debe ser tratado con cautela.
+
+Una justificación automática robusta puede redactarse así:
+
+\begin{quote}
+El modelo fue seleccionado porque presentó un equilibrio adecuado entre parsimonia, ajuste histórico y desempeño predictivo temporal. En el backtesting con origen rodante obtuvo errores MAE, RMSE y MAPE menores o comparables frente a los modelos alternativos, sin evidencia residual crítica que invalide su uso para una proyección de corto plazo.
+\end{quote}
+
+Esta explicación conecta la estadística con el objetivo práctico del software: apoyar decisiones con evidencia reproducible, no solo ajustar curvas visualmente atractivas.

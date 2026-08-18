@@ -1,0 +1,71 @@
+\section{Fundamentos de los índices ICOCIV}
+
+\subsection{Naturaleza económica del índice}
+
+Un índice de costos resume la evolución relativa de precios de una canasta representativa. En el caso del ICOCIV, el DANE lo define como un indicador que permite conocer la variación promedio de precios de una canasta asociada a los costos de construcción de obras civiles desarrolladas en el país \parencite{dane_icociv_web}. Esta definición tiene dos implicaciones metodológicas relevantes. Primero, el índice mide variaciones de precios y no valores absolutos en pesos. Segundo, el índice depende de una estructura de ponderaciones y clasificaciones que busca representar la realidad económica de las obras civiles.
+
+La ficha metodológica del DANE señala que el ICOCIV surge como actualización y ampliación del antiguo Índice de Costos de la Construcción Pesada (ICCP), con una estructura más detallada para obras civiles y con base diciembre de 2020 igual a 100 \parencite{dane_ficha_icociv}. Esta base permite interpretar cada valor como una magnitud relativa frente al periodo base. Por ejemplo, un índice de 125 no significa que un insumo cueste 125 pesos, sino que el nivel del índice está 25 unidades por encima de la base definida.
+
+Desde la ingeniería civil, esta distinción es esencial. El software no estima presupuestos de obra completos; analiza series de índices oficiales que pueden apoyar decisiones de seguimiento, comparación, ajuste y documentación. La interpretación correcta es relativa y temporal: interesa cómo cambia el índice a lo largo del tiempo y cómo podría comportarse en un horizonte futuro bajo la información histórica disponible.
+
+\subsection{Estructura jerárquica del ICOCIV}
+
+El ICOCIV tiene una estructura jerárquica que permite analizar diferentes niveles de agregación. De acuerdo con la información metodológica del DANE, la operación presenta resultados para agrupaciones de subclases, subclases CPC, tipologías de obra, capítulos constructivos, grupos de costo e insumos \parencite{dane_ficha_icociv}. Esta organización es central para el software porque cada selección del usuario determina la serie histórica que se modela.
+
+La estructura puede entenderse como una ruta técnica resumida en la Tabla \ref{tab:niveles_agregacion_icociv_legacy}:
+
+\begin{table}[H]
+\centering
+\caption{Niveles de agregacion e interpretacion tecnica del ICOCIV}
+\label{tab:niveles_agregacion_icociv_legacy}
+\begin{tabular}{ll}
+\toprule
+\textbf{Nivel} & \textbf{Interpretación técnica} \\
+\midrule
+Agrupación o grupo de obra & Categoría amplia de infraestructura civil. \\
+Subclase CPC & Clasificación económica más específica. \\
+Tipología de obra & Tipo técnico de intervención u obra. \\
+Capítulo constructivo & Componente constructivo dentro de la tipología. \\
+Grupo de costos & Familia de recursos: materiales, mano de obra, equipos, transporte, etc. \\
+Insumo & Bien o servicio específico asociado al costo. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Esta jerarquía implica que no todas las series tienen la misma interpretación económica. Una serie agregada puede ser más estable porque combina múltiples componentes; una serie de insumo puede responder con mayor sensibilidad a choques específicos de mercado. Por ello, el software conserva la ruta jerárquica en los reportes técnicos: la trazabilidad de la selección es parte de la interpretación estadística.
+
+\subsection{Agregación, ponderaciones y lectura estadística}
+
+Los índices de precios suelen construirse mediante canastas y ponderaciones. En términos generales, una ponderación refleja la importancia relativa de un componente dentro del agregado. Si un grupo de costo tiene alta participación en la estructura de una obra, variaciones en sus precios pueden afectar de forma más visible el índice agregado.
+
+Una representación simplificada de un índice ponderado es:
+
+\begin{equation}
+    I_t = \sum_{i=1}^{k} w_i I_{i,t},
+    \label{eq:indice_ponderado}
+\end{equation}
+
+donde \(I_t\) es el índice agregado en el periodo \(t\), \(I_{i,t}\) es el índice del componente \(i\), \(w_i\) es su ponderación y \(k\) es el número de componentes. Esta fórmula no pretende reproducir toda la metodología operativa del DANE, sino ilustrar el principio de agregación: el comportamiento del índice agregado depende de sus componentes y pesos relativos.
+
+Para el análisis predictivo, la agregación tiene consecuencias. Las series más agregadas tienden a suavizar fluctuaciones particulares; las series desagregadas pueden mostrar mayor volatilidad. En consecuencia, el diagnóstico de calidad, residuos y backtesting debe aplicarse a la serie específica seleccionada, no a una suposición general sobre todo el ICOCIV.
+
+\subsection{Relación con inflación e índices de precios}
+
+El ICOCIV comparte con otros índices económicos, como el Índice de Precios al Consumidor (IPC), la lógica de medir cambios relativos de precios. Sin embargo, su dominio económico es distinto. El IPC representa precios de consumo de los hogares, mientras el ICOCIV representa costos de bienes y servicios usados en obras civiles. Esta diferencia impide interpretar ambos indicadores como sustitutos directos.
+
+No obstante, ambos pueden estar afectados por factores comunes: inflación general, tasa de cambio, precios internacionales de materias primas, combustibles, costos logísticos y condiciones de mercado laboral. En una economía con inflación persistente, es esperable que muchos índices de costos exhiban tendencia creciente. Por esa razón, el software incorpora restricciones e interpretaciones que evitan proyecciones decrecientes sostenidas cuando no son coherentes con el comportamiento económico observado.
+
+\subsection{Los índices no son observaciones IID}
+
+Una advertencia metodológica central es que los valores mensuales del ICOCIV no son observaciones independientes e idénticamente distribuidas (IID). La hipótesis IID supone que cada observación proviene de la misma distribución y no depende de las demás. En índices económicos mensuales, esa condición rara vez se cumple.
+
+Existen al menos cuatro razones:
+
+\begin{itemize}
+    \item \textbf{Dependencia temporal}: el índice de un mes suele estar relacionado con el del mes anterior.
+    \item \textbf{Tendencia}: los precios pueden crecer de forma persistente por inflación y costos acumulativos.
+    \item \textbf{Autocorrelación}: los errores de un modelo pueden conservar información de errores pasados.
+    \item \textbf{Choques sectoriales}: eventos económicos pueden alterar grupos de insumos durante varios meses.
+\end{itemize}
+
+Por esta razón, el software no usa validación aleatoria tipo \textit{k-fold} tradicional. En su lugar, aplica validación temporal y backtesting con origen rodante, respetando la dirección pasado-futuro del proceso económico \parencite{hyndman_tscv_2021}.

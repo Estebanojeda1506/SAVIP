@@ -1,0 +1,37 @@
+\section{Introducción}
+
+El Índice de Costos de la Construcción de Obras Civiles (ICOCIV) es una operación estadística del Departamento Administrativo Nacional de Estadística (DANE) orientada a medir la variación promedio de los precios de una canasta representativa de bienes y servicios requeridos en la construcción de obras civiles en Colombia \parencite{dane_icociv_web,dane_ficha_icociv}. Su utilidad técnica se relaciona directamente con la planeación financiera, la actualización de presupuestos, la interpretación de variaciones de costos y el soporte documental para decisiones contractuales en infraestructura.
+
+En los proyectos de ingeniería civil, las variaciones de precios no son un aspecto accesorio. Materiales como acero, cemento, asfaltos, agregados y combustibles, así como costos de transporte, maquinaria y mano de obra, pueden modificar de forma importante la estructura económica de un contrato. En ingeniería económica, la evaluación de costos en el tiempo exige reconocer equivalencias, incertidumbre y actualización de flujos o precios \parencite{mcgraw_dieter_tvm_2021}. Por esta razón, una herramienta que permita consultar, analizar y proyectar series históricas del ICOCIV tiene valor metodológico en dos sentidos: primero, como instrumento de organización de datos oficiales; segundo, como soporte estadístico para anticipar tendencias de costos bajo criterios transparentes y reproducibles.
+
+El software ICOCIV desarrollado en este proyecto cumple esa función mediante un flujo de trabajo local: lectura de archivos Excel o XLSB publicados por el DANE, extracción dinámica de periodos reales, navegación por tablas e índices jerárquicos, construcción de series históricas, ajuste de modelos interpretables, validación estadística, backtesting temporal y generación de informes técnicos DOCX. El propósito de este documento no es explicar el uso operativo de la aplicación, sino fundamentar académicamente las decisiones estadísticas implementadas.
+
+La necesidad de esta fundamentación surge porque los índices económicos no pueden tratarse como simples observaciones independientes. Una serie mensual de costos de construcción posee estructura temporal: el valor de un mes suele depender del comportamiento de meses anteriores, puede presentar tendencia, persistencia, autocorrelación y cambios asociados a condiciones macroeconómicas o sectoriales. En consecuencia, el análisis debe reconocer que la información está ordenada en el tiempo y que cualquier pronóstico debe respetar la relación pasado-futuro \parencite{hyndman2021fpp3}.
+
+El enfoque metodológico del software se apoya en modelos de regresión interpretables y diagnósticos estadísticos. Esta decisión responde a una necesidad propia de la ingeniería aplicada: los resultados deben poder explicarse ante un usuario técnico, un evaluador académico o una entidad institucional. En un contexto de soporte documental, no basta con obtener una predicción numérica; es necesario justificar por qué se seleccionó un modelo, qué tan estable fue su desempeño histórico, cuáles son sus limitaciones y cómo debe interpretarse su intervalo de incertidumbre.
+
+La Figura \ref{fig:flujo_metodologico} resume el proceso metodológico implementado. El flujo inicia con información oficial del DANE y finaliza con un reporte técnico trazable. Entre ambos extremos, el software realiza validaciones de datos, modelación estadística, diagnóstico residual y backtesting temporal. Esta secuencia busca evitar dos errores comunes: confiar únicamente en el ajuste histórico y presentar una proyección como si fuera una certeza.
+
+\input{figuras/flujo_metodologico}
+
+Desde una perspectiva académica, el aporte principal del sistema consiste en integrar análisis de datos oficiales, estadística aplicada y documentación técnica reproducible en una aplicación de escritorio ligera. La metodología no pretende sustituir el juicio profesional del ingeniero ni anticipar choques económicos no observados. Su objetivo es aportar una base cuantitativa defendible para el análisis de índices de costos de obras civiles, manteniendo interpretabilidad, trazabilidad y claridad documental.
+
+\section{Alcance metodológico del software}
+
+El software está diseñado para trabajar con series mensuales de índices ICOCIV provenientes de anexos oficiales. La unidad de análisis no es el costo monetario directo de una obra, sino el número índice asociado a una categoría técnica de la estructura ICOCIV. Por tanto, el resultado proyectado debe interpretarse como una estimación del comportamiento futuro del índice seleccionado, no como un presupuesto de obra ni como una actualización automática de precios contractuales.
+
+El sistema se enfoca en proyecciones de corto y mediano plazo. Aunque matemáticamente un modelo de regresión puede extrapolarse a horizontes largos, la validez práctica disminuye a medida que aumenta la distancia respecto al último dato observado. En índices de costos, esta precaución es especialmente importante porque pueden ocurrir cambios de régimen: reformas regulatorias, choques de oferta, alteraciones en precios internacionales, variaciones cambiarias o condiciones excepcionales de transporte y suministro.
+
+Las decisiones metodológicas principales son:
+
+\begin{itemize}
+    \item usar únicamente periodos reales leídos desde el archivo oficial, evitando generar etiquetas artificiales;
+    \item validar continuidad y consistencia temporal antes de ajustar modelos;
+    \item emplear modelos interpretables para preservar explicabilidad técnica;
+    \item comparar modelos con criterios de ajuste, parsimonia y desempeño predictivo;
+    \item evaluar residuos para detectar señales de mala especificación;
+    \item aplicar backtesting temporal en lugar de particiones aleatorias;
+    \item comunicar incertidumbre mediante intervalos y advertencias metodológicas.
+\end{itemize}
+
+Estas decisiones hacen que el software sea apropiado como apoyo académico y técnico, especialmente en contextos donde la reproducibilidad es tan importante como el valor proyectado.
