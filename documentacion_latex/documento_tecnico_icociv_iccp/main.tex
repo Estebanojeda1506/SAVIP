@@ -1557,7 +1557,7 @@ sMAPE &= \frac{100}{n}\sum_{i=1}^{n}\frac{2|y_i-\hat{y}_i|}{|y_i|+|\hat{y}_i|} \
 MASE &= \frac{\frac{1}{n}\sum_{i=1}^{n}|y_i-\hat{y}_i|}{\frac{1}{T-1}\sum_{t=2}^{T}|y_t-y_{t-1}|}
 \end{align}
 
-La tabla \ref{tab:metricas_reales_por_horizonte} registra la salida reproducible para la serie Vías urbanas. \(J_h\) es el número de ventanas válidas del horizonte.
+La tabla \ref{tab:metricas_reales_por_horizonte} registra la salida reproducible para la serie Vías urbanas del anexo con corte en enero de 2026 (\(n=61\)). \(J_h\) es el número de ventanas válidas del horizonte, con \(N_0=6\).
 
 \begin{table}[H]
 \centering
@@ -1569,11 +1569,11 @@ La tabla \ref{tab:metricas_reales_por_horizonte} registra la salida reproducible
 \toprule
 \textbf{\(h\)} & \textbf{\(J_h\)} & \textbf{MAE} & \textbf{RMSE} & \textbf{MAPE} & \textbf{sMAPE} & \textbf{MASE} \\
 \midrule
-1 & 25 & 0,8284 & 1,0617 & 0,6261\% & 0,6270\% & 1,1795 \\
-3 & 23 & 1,8120 & 2,0780 & 1,3661\% & 1,3680\% & 2,5639 \\
-6 & 20 & 2,1063 & 2,4779 & 1,5936\% & 1,5789\% & 2,8980 \\
-12 & 14 & 2,0001 & 2,4025 & 1,4899\% & 1,4740\% & 2,7233 \\
-18 & 8 & 4,4664 & 4,9492 & 3,2713\% & 3,2069\% & 5,9650 \\
+1 & 55 & 0,7205 & 1,0874 & 0,5855\% & 0,5882\% & 1,2089 \\
+3 & 53 & 1,6329 & 2,2318 & 1,3208\% & 1,3303\% & 2,8210 \\
+6 & 50 & 2,5161 & 3,3456 & 2,0381\% & 2,0565\% & 4,4983 \\
+12 & 44 & 3,7764 & 4,4519 & 3,0530\% & 3,0994\% & 7,2643 \\
+18 & 38 & 6,6784 & 7,5202 & 5,2541\% & 5,3673\% & 13,9040 \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
@@ -1767,17 +1767,17 @@ Con estas reglas, el resultado de cada horizonte queda en uno de los estados sig
 \toprule
 \textbf{\(h\)} & \textbf{\(J_h\)} & \textbf{Modelo} & \textbf{RMSE} & \textbf{MAPE} & \textbf{Clasificación} \\
 \midrule
-1 & 25 & Drift & 1,0165 & 0,5858\% & Proyección con cautela \\
-3 & 23 & Drift & 1,7418 & 1,1846\% & Proyección con cautela \\
-6 & 20 & Drift & 2,4779 & 1,5936\% & Proyección con cautela \\
-12 & 14 & Drift & 2,4025 & 1,4899\% & Proyección extendida \\
-18 & 8 & Drift & 4,9492 & 3,2713\% & Escenario de alta incertidumbre \\
+1 & 55 & Drift & 1,0874 & 0,5855\% & Proyección operativa \\
+3 & 53 & Drift & 2,2318 & 1,3208\% & Proyección operativa \\
+6 & 50 & Drift & 3,3456 & 2,0381\% & Proyección técnica de corto/mediano plazo \\
+12 & 44 & Drift & 4,4519 & 3,0530\% & Proyección extendida con cautela \\
+18 & 38 & Drift & 7,5202 & 5,2541\% & Escenario estadístico extendido \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
 \end{table}
 
-En este caso real, el máximo recomendado fue de 12 meses y el máximo admisible alcanzó 23 meses; el horizonte de 18 meses se clasificó como escenario de alta incertidumbre. El corte en 12 meses no obedece a errores excesivos ---el MAPE en \(h=18\) es de 3,27\%, muy por debajo de los umbrales de bloqueo--- sino a una regla de prudencia: sostener una proyección técnica de largo plazo sobre un benchmark simple como Drift no es defendible, aunque su desempeño medido sea aceptable. El ejemplo demuestra que el máximo no se fija a priori: otra ruta, longitud o patrón de errores puede producir un límite menor. La interfaz debe comunicar el estado exacto del horizonte solicitado y no convertir la advertencia de un horizonte en bloqueo global de los demás.
+En este caso real, el máximo recomendado y el máximo admisible coinciden en 55 meses: con \(n=61\) y \(N_0=6\), la cota de existencia \(h\leq n-N_0\) es exactamente ese valor, y ningún horizonte dentro de ella resulta no recomendable. El horizonte de 18 meses se permite como proyección técnica con cautela, la misma clasificación que reciben los demás horizontes de esta serie; que el modelo seleccionado sea Drift queda registrado como advertencia descriptiva ---"el método seleccionado es un benchmark/escenario simple"---, pero esa nota no degrada ni limita el horizonte. El ejemplo demuestra que el máximo no se fija a priori ni depende del tipo de modelo ganador: depende únicamente de la evidencia fuera de muestra disponible para cada horizonte. La interfaz debe comunicar el estado exacto del horizonte solicitado y no convertir la advertencia de un horizonte en bloqueo global de los demás.
 
 \subsubsection{Tratamiento y presentación de resultados}
 
@@ -2365,7 +2365,7 @@ Si la serie es demasiado corta, tiene duplicados críticos o el horizonte result
 
 \subsection{Interpretación de resultados de proyección}
 
-Los resultados deben interpretarse con base en métricas, horizonte viable, intervalos y observaciones metodológicas. Un índice proyectado no equivale a un índice oficial publicado por el \DANE. Por ello, el usuario debe conservar la evidencia del modelo, la fecha proyectada, el estado del horizonte y las advertencias.
+Los resultados deben interpretarse con base en métricas, horizonte viable, evidencia fuera de muestra y observaciones metodológicas. Un índice proyectado no equivale a un índice oficial publicado por el \DANE. Por ello, el usuario debe conservar la evidencia del modelo, la fecha proyectada, el estado del horizonte y las advertencias.
 
 Cuando el panel indique que un horizonte es recomendable, de cautela, escenario o no recomendable, el usuario debe leer esa clasificación junto con las métricas y el estado metodológico. Debe tenerse presente que esta versión no publica intervalo de predicción: la incertidumbre del valor mostrado no viene acotada, y esa ausencia es una limitación declarada, no un descuido de la salida. Un valor puntual puede parecer razonable, pero si el horizonte aparece como escenario o como no recomendable, la proyección no debe usarse como resultado técnico principal sin justificación adicional.
 
