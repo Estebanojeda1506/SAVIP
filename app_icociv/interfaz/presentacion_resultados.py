@@ -138,16 +138,20 @@ def construir_html_explicacion_tarjeta(
         nota = "Es una estimación estadística del índice para el período solicitado; no sustituye la metodología oficial del DANE."
         titulo = "Explicación del índice proyectado"
     elif clave == "horizonte":
+        # post-r1-metodologia-12-24, 19-08-2026 (Prompt 10). El horizonte
+        # solicitado ya no puede quedar restringido por evidencia: bajo la
+        # metodología rectangular N0=12/H=24, W* es el mismo para 1..24, de
+        # modo que solo existe la puerta global de historia suficiente.
         filas = [
             ("Horizonte solicitado", formatear_horizonte(solicitado.get("horizonte_solicitado")), ""),
             ("Origen", _texto_oracion(solicitado.get("origen_horizonte")), ""),
-            ("Estado", _estado_solicitado_visible(solicitado.get("estado")), ""),
-            ("Evaluación completa", "Sí" if info.get("horizonte_solicitado_cubierto") else "No", ""),
-            ("Máximo recomendado", formatear_horizonte(info.get("horizonte_maximo_recomendado")), ""),
-            ("Máximo evaluado", formatear_horizonte(info.get("horizonte_maximo_evaluado")), ""),
-            ("Diferencia clave", "El solicitado es lo pedido; el recomendado es el último h técnico consecutivo; el evaluado es el borde real de la auditoría.", ""),
+            ("Alcance máximo de proyección de SAVIP", formatear_horizonte(info.get("alcance_maximo_proyeccion")), ""),
+            ("Evidencia OOS común (W*)", _entero(info.get("w_estrella")) if info.get("w_estrella") is not None else NO_APLICA, ""),
         ]
-        nota = info.get("razon_parada") or "No se registró una razón de parada."
+        nota = (
+            "El límite de 24 meses corresponde al alcance operativo definido para la herramienta y "
+            "no constituye una frontera estadística universal de predictibilidad."
+        )
         titulo = "Explicación del horizonte solicitado"
     elif clave == "modelo":
         catalogo = proyeccion.get("catalogo_modelos") or (proyeccion.get("stats") or {}).get("catalogo_modelos") or []
@@ -207,74 +211,36 @@ def construir_html_explicacion_tarjeta(
         )
         titulo = "Incertidumbre: intervalo no publicado"
     else:
-        # H-4/P0-H residual, 18-08-2026 (micro-remediacion final post-R2
-        # residual). Esta tarjeta describia "maximo como escenario" como un
-        # tercer estado retirado, leyendo ademas `horizonte_maximo_permitido_
-        # como_escenario` -poblado desde `max_escenario_puro`, que busca
-        # clasificaciones ("escenario_alta_incertidumbre"/"escenario_
-        # estadistico") que `_clasificar_evidencia_horizonte` ya no produce, y
-        # por tanto vale 0 siempre-. El campo vigente y equivalente a "maximo
-        # admisible" es `horizonte_maximo_admisible` (de `_mayor_horizonte_
-        # permitido`, que ya no exige continuidad desde h=1 tras P0-H,
-        # 16-08-2026).
+        # post-r1-metodologia-12-24, 19-08-2026 (Prompt 10). Metodologia final:
+        # backtesting rectangular N0=12/H=24. No existe ya un "maximo
+        # recomendado" derivado de una rejilla triangular: SAVIP tiene un
+        # unico alcance operativo declarado (24 meses), un unico modelo por
+        # serie y un unico RMSE de seleccion sobre el rectangulo comun.
         filas = [
+            ("Alcance máximo de proyección de SAVIP", formatear_horizonte(info.get("alcance_maximo_proyeccion")), ""),
+            ("Evidencia OOS común (W*)", _entero(info.get("w_estrella")) if info.get("w_estrella") is not None else NO_APLICA, ""),
+            ("Modelo seleccionado", info.get("modelo_seleccionado") or NO_APLICA, ""),
             (
-                "Máximo recomendado",
-                _horizonte_identificado(info.get("horizonte_maximo_recomendado"))
-                + (
-                    " (dentro de grilla evaluada)"
-                    if info.get("maximo_recomendado_es_limite_observado")
-                    else ""
-                ),
+                "RMSE OOS usado en la selección (1–24 meses)",
+                formatear_valor(info.get("rmse_seleccion_oos")),
                 "",
             ),
+            ("Segundo modelo", info.get("modelo_segundo") or NO_APLICA, ""),
             (
-                "Base del máximo recomendado",
-                info.get("base_horizonte_maximo_recomendado")
-                or "Mayor horizonte clasificado como técnico, exista o no un hueco antes",
-                "",
-            ),
-            (
-                "Máximo admisible",
-                _horizonte_identificado(info.get("horizonte_maximo_admisible")),
-                "",
-            ),
-            (
-                "Base del máximo admisible",
-                "Mayor horizonte permitido con evidencia propia, exista o no un hueco antes",
-                "",
-            ),
-            ("Máximo evaluado", formatear_horizonte(info.get("horizonte_maximo_evaluado")), ""),
-            (
-                "Límite operativo",
-                formatear_horizonte(info.get("horizonte_maximo_busqueda_configurado"))
-                if _entero(info.get("horizonte_maximo_busqueda_configurado"))
+                "Diferencia frente al segundo modelo",
+                formatear_porcentaje(info.get("diferencia_porcentual_segundo"))
+                if info.get("diferencia_porcentual_segundo") is not None
                 else NO_APLICA,
                 "",
             ),
-            ("Primer horizonte no viable", _horizonte_no_viable(info.get("primer_horizonte_no_viable")), ""),
-            ("Razón de parada", info.get("razon_parada"), ""),
-            (
-                "Advertencia metodológica",
-                info.get("advertencia_metodologica_horizontes")
-                or "No se debe inferir validez para horizontes no evaluados.",
-                "",
-            ),
         ]
-        if info.get("maximo_recomendado_es_limite_observado"):
-            filas.append(
-                (
-                    "Significado de «dentro de grilla evaluada»",
-                    "Este valor corresponde únicamente a los horizontes efectivamente evaluados. "
-                    "No demuestra validez para horizontes superiores.",
-                    "",
-                )
-            )
         nota = (
-            "El máximo recomendado no corresponde al límite operativo ni al último horizonte evaluado, "
-            "salvo que coincida con la clasificación técnica de la serie."
+            "El límite de 24 meses corresponde al alcance operativo definido para la herramienta y no "
+            "constituye una frontera estadística universal de predictibilidad. La diferencia frente al "
+            "segundo modelo es informativa: no existe una prueba formal de significancia ni un umbral "
+            "de empate que sustituya al modelo seleccionado."
         )
-        titulo = "Explicación del máximo recomendado"
+        titulo = "Explicación del alcance máximo de proyección"
     return _estilos_html(tema) + _tabla_clave_valor(titulo, filas, nota=nota)
 
 
@@ -602,59 +568,40 @@ def _texto_cobertura_empirica(cobertura: dict[str, Any]) -> str:
 
 
 def _tabla_horizonte_estadistico(proyeccion: dict[str, Any]) -> str:
+    # post-r1-metodologia-12-24, 19-08-2026 (Prompt 10). Metodologia final:
+    # backtesting rectangular N0=12/H=24. Sustituye la tabla triangular
+    # anterior (horizonte maximo recomendado/admisible/como escenario, primer
+    # horizonte no viable, huecos): bajo el rectangulo, el unico limite es el
+    # alcance operativo declarado (24 meses) y la unica puerta es la historia
+    # suficiente para W* >= 1, ya resuelta antes de llegar a este resultado.
     info = _analisis_horizontes(proyeccion)
-    evaluados = info.get("horizontes_evaluados") or [
-        item.get("horizonte") for item in info.get("evaluaciones", []) if item.get("horizonte") is not None
-    ]
-    no_evaluados = info.get("horizontes_no_evaluados") or info.get("horizontes_no_evaluados_no_recomendables") or []
     solicitado = _coalesce(proyeccion.get("horizonte_solicitado"), info.get("horizonte_solicitado"))
-    accion = _resultado_solicitado(proyeccion).get("accion")
     filas = [
         ("Horizonte solicitado", formatear_horizonte(solicitado), ""),
-        ("Horizontes evaluados", _resumen_horizontes(evaluados), ""),
+        ("Alcance máximo de proyección de SAVIP", formatear_horizonte(info.get("alcance_maximo_proyeccion")), ""),
+        ("Evidencia OOS común (W*)", _entero(info.get("w_estrella")) if info.get("w_estrella") is not None else NO_APLICA, ""),
+        ("Primer origen del backtesting (N0)", _entero(info.get("n0_backtesting")) if info.get("n0_backtesting") is not None else NO_APLICA, ""),
+        ("Modelo seleccionado", info.get("modelo_seleccionado") or NO_APLICA, ""),
         (
-            "Horizonte máximo recomendado dentro de la grilla evaluada"
-            if info.get("maximo_recomendado_es_limite_observado")
-            else "Horizonte máximo recomendado",
-            _horizonte_identificado(info.get("horizonte_maximo_recomendado")),
+            "RMSE OOS usado en la selección (1–24 meses)",
+            formatear_valor(info.get("rmse_seleccion_oos")),
             "",
         ),
+        ("Segundo modelo", info.get("modelo_segundo") or NO_APLICA, ""),
         (
-            "Horizonte máximo permitido como escenario",
-            _horizonte_identificado(info.get("horizonte_maximo_permitido_como_escenario")),
+            "Diferencia frente al segundo modelo",
+            formatear_porcentaje(info.get("diferencia_porcentual_segundo"))
+            if info.get("diferencia_porcentual_segundo") is not None
+            else NO_APLICA,
             "",
         ),
-        ("Máximo horizonte evaluado", formatear_horizonte(info.get("horizonte_maximo_evaluado")), ""),
-        ("Límite operativo de auditoría", formatear_horizonte(info.get("horizonte_maximo_busqueda_configurado")), ""),
-        ("Primer horizonte no viable", _horizonte_no_viable(info.get("primer_horizonte_no_viable")), ""),
-        ("Razón de parada", info.get("razon_parada"), ""),
-        (
-            "Advertencia metodológica",
-            info.get("advertencia_metodologica_horizontes") or NO_APLICA,
-            "",
-        ),
-        ("Máximo evaluable por datos", formatear_horizonte(info.get("horizonte_maximo_evaluable_por_datos")), ""),
-        (
-            "Horizonte solicitado cubierto",
-            "Sí" if info.get("horizonte_solicitado_cubierto") else "No",
-            "alerta" if not info.get("horizonte_solicitado_cubierto") else "",
-        ),
-        ("Horizontes no recomendables", _resumen_horizontes(info.get("horizontes_no_recomendables") or []), ""),
-        ("Horizontes no evaluados", _resumen_horizontes(no_evaluados), ""),
-        ("Acción global", _texto_oracion(accion), "alerta" if accion == "negar" else ""),
     ]
     nota = (
-        "El horizonte solicitado no pudo evaluarse completamente por falta de evidencia OOS suficiente."
-        if not info.get("horizonte_solicitado_cubierto")
-        and info.get("tipo_parada") == "evidencia_oos_insuficiente"
-        else (
-            "El máximo recomendado alcanzó el borde de la grilla evaluada; no implica validez para horizontes superiores."
-            if info.get("maximo_recomendado_es_limite_observado")
-            else "El horizonte solicitado indica hasta dónde desea proyectar el usuario; "
-            "la app evalúa si existe respaldo estadístico suficiente."
-        )
+        "El límite de 24 meses corresponde al alcance operativo definido para la herramienta y no "
+        "constituye una frontera estadística universal de predictibilidad. El modelo se selecciona una "
+        "sola vez sobre el dominio completo de 1 a 24 meses y no cambia con el horizonte solicitado."
     )
-    return _tabla_clave_valor("Resumen del análisis dinámico de horizontes", filas, nota=nota)
+    return _tabla_clave_valor("Resumen de la metodología de proyección (N0=12, H=24)", filas, nota=nota)
 
 
 def _tabla_parametros_modelo(proyeccion: dict[str, Any]) -> str:

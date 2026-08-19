@@ -50,6 +50,7 @@ from app_icociv.utilidades.utilidades import (
 from app_icociv.validacion.backtesting import (
     _entrenamiento_inicial,
     ejecutar_backtesting_comparativo,
+    interpretar_backtesting,
     seleccionar_mejor_modelo,
 )
 from app_icociv.estadistica.calendario_anual import (
@@ -392,13 +393,28 @@ def construir_serie(fila: pd.DataFrame, year_month: list[str]) -> pd.DataFrame:
 # ==============================
 
 MENSAJE_HORIZONTE_INVALIDO = "El horizonte solicitado debe ser un número entero positivo de meses."
+#: post-r1-metodologia-12-24, 19-08-2026 (Prompt 10). Metodologia final de
+#: proyeccion SAVIP, validada en los Prompts 08/09 sobre MUESTRA_SAVIP_10.
+#:
+#: H_OPERATIVO_MAX = 24: alcance operativo maximo de SAVIP (dos anios). Es una
+#: decision funcional/institucional de alcance de la herramienta, NO una
+#: frontera estadistica de predictibilidad ni un maximo derivado de W, sMAPE
+#: o IC95. El usuario puede solicitar 1..24 meses; SAVIP no admite h>24.
+H_OPERATIVO_MAX = 24
+
+#: N0_BACKTESTING = 12: primer origen del backtesting rectangular (un anio
+#: completo de historia mensual antes de puntuar OOS). Es una decision
+#: metodologica de diseno POSTERIOR a la de N0=6 (derivado como
+#: max(Nmin_modelos)); no se afirma estadisticamente optima ni implica
+#: estacionalidad anual. Nmin de cada modelo sigue significando unicamente su
+#: minimo operativo de estimabilidad (parametros a identificar), no el primer
+#: origen del backtesting: ambos conceptos NO deben confundirse.
+N0_BACKTESTING = 12
+
 #: Limite de ENTRADA del producto: horizonte maximo que el usuario puede pedir.
-#: P0-H, 12-08-2026: se conserva y se RECLASIFICA. Verificado que su unico uso es
-#: `validar_horizonte_solicitado`, es decir la validacion del dato de entrada; NO
-#: interviene en ningun calculo estadistico ni en la rejilla evaluada. No tiene
-#: fuente y NO debe presentarse como «maximo estadisticamente valido»: es un
-#: limite operativo del producto.
-HORIZONTE_MAXIMO_OPERATIVO = 60
+#: Coincide con H_OPERATIVO_MAX: no existe una entrada de usuario mas alla del
+#: alcance operativo declarado.
+HORIZONTE_MAXIMO_OPERATIVO = H_OPERATIVO_MAX
 
 #: Estado metodológico del resultado (P0-G, 12-08-2026).
 #:
@@ -724,6 +740,229 @@ def _retirar_errores_oos_de_publicacion(backtesting: Any) -> None:
         backtesting["predicciones"] = tabla.drop(columns=sobrantes)
 
 
+# ============================================================
+# METODOLOGIA FINAL: BACKTESTING RECTANGULAR N0=12 / H=24
+# post-r1-metodologia-12-24, 19-08-2026 (Prompt 10), validada en los
+# Prompts 08 y 09 sobre MUESTRA_ESTRATIFICADA_SAVIP_10.
+# ============================================================
+
+
+def _matriz_rectangular_12_24(
+    serie_trabajo: pd.DataFrame,
+    modelos: tuple[str, ...],
+    anio_base: int,
+) -> dict[str, Any]:
+    """Construye la matriz de evaluacion OOS RECTANGULAR de la metodologia final.
+
+    Un origen o es elegible SOLO si dispone de al menos N0_BACKTESTING
+    observaciones de entrenamiento Y existen los H_OPERATIVO_MAX valores
+    futuros observados, de modo que TODOS los horizontes 1..H_OPERATIVO_MAX
+    comparten exactamente los mismos W* origenes -a diferencia de la rejilla
+    triangular anterior, donde h corto reunia mas origenes que h largo-.
+
+        W* = n - N0_BACKTESTING - H_OPERATIVO_MAX + 1
+
+    Reutiliza `ejecutar_backtesting_comparativo` en una sola llamada, sin
+    reajustar nada por separado: la prediccion en un origen concreto depende
+    solo de los datos disponibles hasta ese origen, no del valor nominal de
+    `entrenamiento_inicial` con el que se invoco el backtesting -la propiedad
+    verificada en los Prompts 08/09-, de modo que basta filtrar cada horizonte
+    por `Observaciones_entrenamiento` (=origen) para obtener el rectangulo.
+    """
+    n = int(len(serie_trabajo))
+    w_estrella = n - N0_BACKTESTING - H_OPERATIVO_MAX + 1
+    if w_estrella < 1:
+        return {"suficiente": False, "n": n, "w_estrella": w_estrella}
+
+    horizontes = tuple(range(1, H_OPERATIVO_MAX + 1))
+    backtesting_comparativo = ejecutar_backtesting_comparativo(
+        serie_trabajo[["Periodo", "Indice"]],
+        modelos=modelos,
+        horizontes=horizontes,
+        anio_base=anio_base,
+        entrenamiento_inicial=N0_BACKTESTING,
+    )
+    origenes = tuple(range(N0_BACKTESTING, n - H_OPERATIVO_MAX + 1))
+    idx_origen = {o: i for i, o in enumerate(origenes)}
+
+    datos: dict[str, dict[tuple[int, int], tuple[float, float, float, float]]] = {}
+    for modelo in modelos:
+        destino: dict[tuple[int, int], tuple[float, float, float, float]] = {}
+        for h in horizontes:
+            resultado = backtesting_comparativo.get(f"{modelo}_h{h}") or {}
+            if not resultado.get("ejecutado"):
+                continue
+            predicciones = resultado.get("predicciones")
+            if not isinstance(predicciones, pd.DataFrame) or predicciones.empty:
+                continue
+            for _, fila in predicciones.iterrows():
+                corte = int(fila["Observaciones_entrenamiento"])
+                if corte not in idx_origen:
+                    continue
+                error = fila["Error"]
+                if not np.isfinite(error):
+                    continue
+                destino[(corte, h)] = (
+                    float(error),
+                    float(fila["Observado"]),
+                    float(fila["Predicho"]),
+                    float(fila["Escala_naive_insample"]),
+                )
+        datos[modelo] = destino
+
+    return {
+        "suficiente": True,
+        "n": n,
+        "w_estrella": w_estrella,
+        "horizontes": horizontes,
+        "origenes": origenes,
+        "backtesting_comparativo": backtesting_comparativo,
+        "datos": datos,
+    }
+
+
+def _seleccionar_modelo_rectangular(
+    matriz: dict[str, Any],
+    modelos: tuple[str, ...],
+) -> dict[str, Any] | None:
+    """Selecciona el modelo unico por RMSE OOS sobre el rectangulo comun.
+
+        RMSE_rect(m) = sqrt( sum_{(o,h) en S} e(m,o,h)^2 / |S| )
+        m* = argmin_m RMSE_rect(m)
+
+    ``S`` es la muestra comun: pares (origen, horizonte) con error finito para
+    TODOS los candidatos comparados. Mismo criterio (RMSE OOS sobre muestra
+    comun) y mismo desempate exacto que la seleccion global anterior (SSE
+    exacto con `Fraction`, primer candidato del orden de aparicion del banco
+    ante empate exacto; ver `_sse_exacto`); la unica diferencia es GEOMETRICA:
+    ``S`` vive en un rectangulo W* x H_OPERATIVO_MAX con los mismos origenes
+    para todo horizonte, no en una rejilla triangular. Sin pesos por horizonte
+    ni por origen, sin preferencia por complejidad ni por benchmark, sin veto
+    de diagnosticos.
+    """
+    datos = matriz.get("datos") or {}
+    comunes: set[tuple[int, int]] | None = None
+    for modelo in modelos:
+        pares = set(datos.get(modelo, {}))
+        comunes = pares if comunes is None else (comunes & pares)
+    if not comunes:
+        return None
+
+    resultados: list[tuple[str, Fraction, float]] = []
+    for modelo in modelos:
+        valores = [datos[modelo][par][0] for par in comunes]
+        if not all(math.isfinite(v) for v in valores):
+            continue
+        sse = _sse_exacto(valores)
+        rmse = math.sqrt(float(sse) / len(valores))
+        resultados.append((modelo, sse, rmse))
+    if not resultados:
+        return None
+    resultados.sort(key=lambda item: item[1])
+
+    ganador, _, rmse_ganador = resultados[0]
+    if len(resultados) > 1:
+        segundo, _, rmse_segundo = resultados[1]
+        diferencia_absoluta = rmse_segundo - rmse_ganador
+        diferencia_porcentual = (
+            diferencia_absoluta / rmse_ganador * 100.0 if rmse_ganador > 0 else float("nan")
+        )
+    else:
+        segundo, rmse_segundo, diferencia_absoluta, diferencia_porcentual = None, None, None, None
+
+    return {
+        "modelo": ganador,
+        "rmse_seleccion_oos": rmse_ganador,
+        "modelo_segundo": segundo,
+        "rmse_segundo_oos": rmse_segundo,
+        "diferencia_absoluta": diferencia_absoluta,
+        "diferencia_porcentual": diferencia_porcentual,
+        "pares_comunes": len(comunes),
+        "pares_esperados": int(matriz["w_estrella"]) * len(matriz["horizontes"]),
+    }
+
+
+def _metricas_horizonte_rectangular(matriz: dict[str, Any], modelo: str, h: int) -> dict[str, Any]:
+    """Metricas historicas del horizonte ``h`` para ``modelo``, sobre el mismo
+    rectangulo que decidio la seleccion.
+
+    NO es el RMSE decisivo (`rmse_seleccion_oos`, agregado sobre 1..24): es la
+    evidencia especifica de ese paso, publicada aparte y sin decidir nada.
+    Bajo el rectangulo completo, ``W`` coincide con ``w_estrella`` para todos
+    los horizontes evaluados del modelo ganador.
+    """
+    datos = (matriz.get("datos") or {}).get(modelo, {})
+    pares_h = [par for par in datos if par[1] == h]
+    if not pares_h:
+        return {
+            "W": 0, "RMSE": float("nan"), "MAE": float("nan"),
+            "sMAPE": float("nan"), "MASE": float("nan"), "sesgo": float("nan"),
+        }
+    observado = np.array([datos[p][1] for p in pares_h], dtype=float)
+    predicho = np.array([datos[p][2] for p in pares_h], dtype=float)
+    error_abs = np.array([abs(datos[p][0]) for p in pares_h], dtype=float)
+    escala = np.array([datos[p][3] for p in pares_h], dtype=float)
+    return {
+        "W": len(pares_h),
+        "RMSE": calcular_rmse(observado, predicho),
+        "MAE": calcular_mae(observado, predicho),
+        "sMAPE": calcular_smape(observado, predicho),
+        "MASE": calcular_mase_por_origen(error_abs, escala),
+        "sesgo": calcular_sesgo_medio(observado, predicho),
+    }
+
+
+def _backtesting_horizonte_desde_rectangulo(matriz: dict[str, Any], modelo: str, h: int) -> dict[str, Any]:
+    """Objeto ``backtesting`` (forma que consume el resto del pipeline: metricas,
+    iteraciones, predicciones, interpretacion) para el horizonte ``h``
+    solicitado, construido sobre el mismo rectangulo que decidio la seleccion.
+
+    Distinto de `rmse_seleccion_oos` (item 10, Prompt 10): esto es evidencia
+    historica de UN paso, no la metrica que decidio el modelo.
+    """
+    datos = (matriz.get("datos") or {}).get(modelo, {})
+    pares_h = sorted(par for par in datos if par[1] == h)
+    if not pares_h:
+        return {
+            "ejecutado": False, "metodo": "Walk-forward rectangular (N0=12, H=24)",
+            "entrenamiento_inicial": N0_BACKTESTING, "horizonte": int(h),
+            "iteraciones": 0, "metricas": {}, "predicciones": pd.DataFrame(),
+            "errores": [], "interpretacion": "Backtesting sin iteraciones para este horizonte.",
+        }
+    observado = np.array([datos[p][1] for p in pares_h], dtype=float)
+    predicho = np.array([datos[p][2] for p in pares_h], dtype=float)
+    errores = observado - predicho
+    error_abs = np.abs(errores)
+    escala = np.array([datos[p][3] for p in pares_h], dtype=float)
+    metricas = {
+        "rmse": calcular_rmse(observado, predicho),
+        "mae": calcular_mae(observado, predicho),
+        "mape": calcular_mape(observado, predicho),
+        "smape": calcular_smape(observado, predicho),
+        "mase": calcular_mase_por_origen(error_abs, escala),
+        "sesgo_medio": calcular_sesgo_medio(observado, predicho),
+        "error_medio": calcular_sesgo_medio(observado, predicho),
+        "desviacion_error": float(np.std(errores, ddof=1)) if len(errores) > 1 else 0.0,
+        "iteraciones": len(pares_h),
+    }
+    predicciones_df = pd.DataFrame({
+        "Observado": observado, "Predicho": predicho, "Error": errores,
+        "Error_abs": error_abs, "Horizonte": [int(h)] * len(pares_h),
+        "Origen": [p[0] for p in pares_h],
+    })
+    return {
+        "ejecutado": True,
+        "metodo": "Walk-forward rectangular (N0=12, H=24)",
+        "entrenamiento_inicial": N0_BACKTESTING,
+        "horizonte": int(h),
+        "iteraciones": len(pares_h),
+        "metricas": metricas,
+        "predicciones": predicciones_df,
+        "errores": [],
+        "interpretacion": interpretar_backtesting(metricas),
+    }
+
+
 def _ejecutar_proyeccion_base(
     serie_df: pd.DataFrame,
     year_proj: int,
@@ -789,12 +1028,16 @@ def _ejecutar_proyeccion_base(
             explicacion=factibilidad.get("explicacion"),
         )
 
-    horizontes_eval = _horizontes_evaluacion(horizonte_solicitado, len(y_obs))
-    metadatos_auditoria = _metadatos_auditoria_horizontes(
-        serie_trabajo,
-        horizonte_solicitado,
-        origen_horizonte="interno",
-    )
+    # ------------------------------------------------------------------
+    # post-r1-metodologia-12-24, 19-08-2026 (Prompt 10). Metodologia final:
+    # backtesting rectangular N0=12/H=24, un unico modelo por RMSE OOS sobre
+    # el rectangulo comun, validada en los Prompts 08/09 sobre MUESTRA_SAVIP_10.
+    # Sustituye la rejilla triangular anterior (N0=6, h dinamico por evidencia
+    # W>=1) y toda la maquinaria de admisibilidad/escenario por horizonte que
+    # dependia de ella: bajo el rectangulo, W* es identico para 1..24, de modo
+    # que solo existe UNA puerta global (historia suficiente para W*>=1), no
+    # una puerta por horizonte.
+    # ------------------------------------------------------------------
     modelos_evaluados, politica_modelos = _modelos_para_analisis(
         serie_trabajo=serie_trabajo,
         horizonte_solicitado=horizonte_solicitado,
@@ -802,119 +1045,67 @@ def _ejecutar_proyeccion_base(
         outliers=outliers,
     )
     candidatos = ajustar_modelos_candidatos(t_obs, y_obs, modelos=modelos_evaluados)
-    backtesting_comparativo = ejecutar_backtesting_comparativo(
-        serie_trabajo[["Periodo", "Indice"]],
-        modelos=modelos_evaluados,
-        horizontes=horizontes_eval,
-        anio_base=anio_base,
-    )
-    # Un unico modelo por serie: se fija antes de evaluar horizontes para que la
-    # clasificacion de admisibilidad, las metricas, los intervalos y la
-    # trayectoria correspondan todos al mismo modelo.
-    modelo_consistente = _modelo_consistente_desde_comparativo(backtesting_comparativo, horizontes_eval)
-    evaluaciones_horizonte = _evaluar_horizontes_proyeccion(
-        candidatos=candidatos,
-        backtesting_comparativo=backtesting_comparativo,
-        horizontes=horizontes_eval,
-        serie_trabajo=serie_trabajo,
-        validacion_serie=validacion_serie,
-        outliers=outliers,
-        t_ultimo=t_ultimo,
-        y_obs=y_obs,
-        anio_base=anio_base,
-        modelo_fijo=modelo_consistente,
-    )
-    # Salvaguarda conservadora (D-3): si el modelo fijo produce un horizonte no
-    # viable por causas del modelo, se prueban Drift y Naive antes de bloquear.
-    evaluaciones_horizonte, modelo_consistente, salvaguarda_benchmark = _aplicar_salvaguarda_benchmarks(
-        evaluaciones=evaluaciones_horizonte,
-        modelo_consistente=modelo_consistente,
-        candidatos=candidatos,
-        backtesting_comparativo=backtesting_comparativo,
-        horizontes=horizontes_eval,
-        serie_trabajo=serie_trabajo,
-        validacion_serie=validacion_serie,
-        outliers=outliers,
-        t_ultimo=t_ultimo,
-        y_obs=y_obs,
-        anio_base=anio_base,
-        horizonte_solicitado=horizonte_solicitado,
-    )
-    seleccion_horizonte = _seleccionar_horizonte_permitido(evaluaciones_horizonte, horizonte_solicitado)
-    if seleccion_horizonte is None:
-        mejor_no_permitida = evaluaciones_horizonte[0] if evaluaciones_horizonte else {}
-        modelo_np = mejor_no_permitida.get("modelo")
-        # HGRID, 17-08-2026 (V-CODEX-R3, residual 2). Cuando la rejilla queda vacia
-        # -`n <= N0`, ningun horizonte con una sola ventana- el motivo NO es que los
-        # modelos no tengan «respaldo suficiente en backtesting»: eso enuncia un
-        # juicio de calidad sobre una evaluacion que no llego a existir. El motivo
-        # es la inexistencia del dato, causa (2), y se dice con el vocabulario de
-        # evidencia OOS.
-        #
-        # Se cita el minimo del CATALOGO, no `_entrenamiento_inicial`: este ultimo
-        # aplica el acotado de disponibilidad `N0 <= n-1` y devolveria un origen
-        # -1 con n=2- que el backtesting nunca llega a usar, porque retorna antes
-        # por no alcanzar el minimo de estimabilidad. El numero honesto es el que
-        # realmente ata.
-        if horizontes_eval:
-            motivo_base = "Ningun modelo evaluado tuvo respaldo suficiente en backtesting."
-        else:
-            minimo_catalogo = observaciones_minimas_catalogo(_catalogo_activo())
-            motivo_base = (
-                f"{_texto_evidencia_oos(0)} Con {len(y_obs)} observaciones y un primer "
-                f"origen de {minimo_catalogo} -provisional-, ningun horizonte reune un "
-                f"solo error de origen movil: hacen falta al menos {minimo_catalogo + 1} "
-                "observaciones para que exista un par (objetivo, horizonte)."
-            )
-        factibilidad_np = mejor_no_permitida.get("factibilidad") or {
+
+    matriz = _matriz_rectangular_12_24(serie_trabajo, modelos_evaluados, anio_base)
+    if not matriz.get("suficiente"):
+        minimo_requerido = N0_BACKTESTING + H_OPERATIVO_MAX
+        motivo_insuficiente = (
+            f"La metodología de proyección de SAVIP (N0={N0_BACKTESTING}, alcance máximo "
+            f"H={H_OPERATIVO_MAX} meses) requiere al menos {minimo_requerido} observaciones "
+            f"mensuales para construir un origen completo de evaluación fuera de muestra "
+            f"(W* = n − {N0_BACKTESTING} − {H_OPERATIVO_MAX} + 1 ≥ 1). Esta serie tiene "
+            f"{len(y_obs)} observaciones, de modo que la metodología productiva 12/24 no "
+            "puede aplicarse todavía sobre ella."
+        )
+        factibilidad_insuficiente = {
             "factible": False,
-            "estado": "No recomendable",
+            "estado": "Historia insuficiente para la metodología 12/24",
             "nivel_confianza_metodologica": "no recomendable",
-            "razones_tecnicas": [motivo_base],
+            "razones_tecnicas": [motivo_insuficiente],
             "advertencias": [],
             "horizonte_maximo_sugerido": 0,
             "puede_generarse_informe": True,
-            "explicacion": motivo_base,
+            "explicacion": motivo_insuficiente,
         }
-        catalogo_np = _catalogo_modelos_reporte(
-            modelos_evaluados=modelos_evaluados,
-            candidatos=candidatos,
-            backtesting_por_modelo=mejor_no_permitida.get("backtesting_por_modelo", {}),
-            modelo_seleccionado=modelo_np,
-            horizonte=mejor_no_permitida.get("horizonte"),
-            serie_trabajo=serie_trabajo,
-        )
-        horizonte_info_np = determinar_horizonte_maximo_estadistico(
-            serie=serie_trabajo,
-            modelos=candidatos,
-            backtesting=backtesting_comparativo,
-            intervalos=evaluaciones_horizonte,
-            diagnosticos=mejor_no_permitida.get("diagnostico_residuos", {}),
+        horizonte_info_insuficiente = {
+            "alcance_maximo_proyeccion": H_OPERATIVO_MAX,
+            "n0_backtesting": N0_BACKTESTING,
+            "w_estrella": int(matriz.get("w_estrella", 0)),
+            "historia_suficiente_12_24": False,
+            "razones": [motivo_insuficiente],
+            "mensaje": motivo_insuficiente,
+        }
+        return _resultado_sin_proyeccion(
+            periodo_solicitado=periodo_solicitado,
             horizonte_solicitado=horizonte_solicitado,
-            metadatos_auditoria=metadatos_auditoria,
+            validacion_serie=validacion_serie,
+            analisis_serie=analisis_serie,
+            variables_derivadas=derivadas,
+            outliers=outliers,
+            factibilidad=factibilidad_insuficiente,
+            candidatos=candidatos,
+            politica_modelos=politica_modelos,
+            horizonte_info=horizonte_info_insuficiente,
+            explicacion=motivo_insuficiente,
         )
-        horizonte_info_np["salvaguarda_benchmark"] = salvaguarda_benchmark
-        if salvaguarda_benchmark.get("intentada"):
-            # H-2B, 18-08-2026 (reauditoria dirigida V-CODEX-R2 residual). Esta
-            # razon afirmaba sin comprobarlo "los benchmarks Drift y Naive
-            # tampoco cumplieron los criterios minimos": no leia
-            # `benchmark_habria_ampliado`, de modo que el texto podia
-            # contradecir la propia tabla de benchmarks evaluados. La
-            # salvaguarda es diagnostica (no sustituye), de ahi que el
-            # bloqueo del horizonte se mantenga incluso si un benchmark
-            # habria alcanzado mas alcance.
-            if salvaguarda_benchmark.get("benchmark_habria_ampliado"):
-                razon_bench = (
-                    "Al menos un benchmark evaluado como referencia diagnóstica alcanzaría un "
-                    "horizonte mayor, pero eso no sustituye al modelo principal: el bloqueo de este "
-                    "horizonte se mantiene según la evidencia propia del modelo seleccionado."
-                )
-            else:
-                razon_bench = (
-                    "Los benchmarks Drift y Naive, evaluados como referencia diagnóstica, tampoco "
-                    "alcanzarían un horizonte mayor que el modelo principal."
-                )
-            factibilidad_np.setdefault("razones_tecnicas", []).append(razon_bench)
+
+    backtesting_comparativo = matriz["backtesting_comparativo"]
+    seleccion = _seleccionar_modelo_rectangular(matriz, modelos_evaluados)
+    if seleccion is None:
+        motivo_sin_muestra = (
+            "Ningún modelo evaluado produjo errores finitos comunes sobre el rectángulo "
+            f"W*={matriz['w_estrella']} × H={H_OPERATIVO_MAX} de la metodología 12/24."
+        )
+        factibilidad_np = {
+            "factible": False,
+            "estado": "No recomendable",
+            "nivel_confianza_metodologica": "no recomendable",
+            "razones_tecnicas": [motivo_sin_muestra],
+            "advertencias": [],
+            "horizonte_maximo_sugerido": 0,
+            "puede_generarse_informe": True,
+            "explicacion": motivo_sin_muestra,
+        }
         return _resultado_sin_proyeccion(
             periodo_solicitado=periodo_solicitado,
             horizonte_solicitado=horizonte_solicitado,
@@ -923,20 +1114,43 @@ def _ejecutar_proyeccion_base(
             variables_derivadas=derivadas,
             outliers=outliers,
             factibilidad=factibilidad_np,
-            modelo=modelo_np,
             candidatos=candidatos,
-            diagnostico_residuos=mejor_no_permitida.get("diagnostico_residuos", {}),
-            backtesting=mejor_no_permitida.get("backtesting", {}),
             backtesting_comparativo=backtesting_comparativo,
-            backtesting_por_modelo=mejor_no_permitida.get("backtesting_por_modelo", {}),
             politica_modelos=politica_modelos,
-            catalogo_modelos=catalogo_np,
-            horizonte_info=horizonte_info_np,
-            explicacion=factibilidad_np.get("explicacion"),
+            explicacion=motivo_sin_muestra,
         )
 
-    # El modelo ya viene fijado desde la evaluacion de horizontes.
-    modelo = seleccion_horizonte["modelo"]
+    modelo_codigo = seleccion["modelo"]
+    modelo = next((c for c in candidatos if c.get("nombre") == modelo_codigo and "predict" in c), None)
+    if modelo is None:
+        motivo_refit = (
+            f"El modelo seleccionado ({modelo_codigo}) no pudo reajustarse sobre toda la "
+            "serie histórica disponible."
+        )
+        factibilidad_np = {
+            "factible": False,
+            "estado": "No recomendable",
+            "nivel_confianza_metodologica": "no recomendable",
+            "razones_tecnicas": [motivo_refit],
+            "advertencias": [],
+            "horizonte_maximo_sugerido": 0,
+            "puede_generarse_informe": True,
+            "explicacion": motivo_refit,
+        }
+        return _resultado_sin_proyeccion(
+            periodo_solicitado=periodo_solicitado,
+            horizonte_solicitado=horizonte_solicitado,
+            validacion_serie=validacion_serie,
+            analisis_serie=analisis_serie,
+            variables_derivadas=derivadas,
+            outliers=outliers,
+            factibilidad=factibilidad_np,
+            candidatos=candidatos,
+            backtesting_comparativo=backtesting_comparativo,
+            politica_modelos=politica_modelos,
+            explicacion=motivo_refit,
+        )
+
     comparacion_benchmarks = modelo.get("comparacion_benchmarks", {})
     model_name = modelo["nombre_visible"]
     y_fit_obs = np.asarray(modelo["yhat"], dtype=float)
@@ -945,10 +1159,19 @@ def _ejecutar_proyeccion_base(
     diagnostico_residuos = modelo.get("diagnostico_residuos")
     if not diagnostico_residuos:
         diagnostico_residuos = evaluar_residuos(residuos, tipo_modelo=modelo.get("nombre"))
-    backtesting = seleccion_horizonte["backtesting"]
-    backtesting_por_modelo = seleccion_horizonte["backtesting_por_modelo"]
-    factibilidad = seleccion_horizonte["factibilidad"]
-    horizonte_permitido = int(seleccion_horizonte["horizonte"])
+
+    # DISTINCION EXPLICITA (item 10, Prompt 10): `seleccion["rmse_seleccion_oos"]`
+    # decidio el modelo (agregado 1..24 sobre el rectangulo); `backtesting` de
+    # aqui en adelante es la evidencia PROPIA del horizonte solicitado, un
+    # concepto distinto que NO decide nada. El bug conocido de R1 -presentar el
+    # RMSE_h solicitado como si fuera el decisivo- no se repite: ambos viajan
+    # por separado en el resultado publico (ver "rmse_seleccion_oos" abajo).
+    backtesting = _backtesting_horizonte_desde_rectangulo(matriz, modelo_codigo, horizonte_solicitado)
+    backtesting_por_modelo = {
+        m: _backtesting_horizonte_desde_rectangulo(matriz, m, horizonte_solicitado)
+        for m in modelos_evaluados
+    }
+    horizonte_permitido = int(horizonte_solicitado)
     catalogo_modelos = _catalogo_modelos_reporte(
         modelos_evaluados=modelos_evaluados,
         candidatos=candidatos,
@@ -957,113 +1180,65 @@ def _ejecutar_proyeccion_base(
         horizonte=horizonte_permitido,
         serie_trabajo=serie_trabajo,
     )
-    horizonte_info = determinar_horizonte_maximo_estadistico(
+    factibilidad = evaluar_factibilidad_proyeccion(
         serie=serie_trabajo,
-        modelos=candidatos,
-        backtesting=backtesting_comparativo,
-        intervalos=evaluaciones_horizonte,
-        diagnosticos=diagnostico_residuos,
+        validacion=validacion_serie,
+        outliers=outliers,
+        diagnostico=diagnostico_residuos,
+        backtesting=backtesting,
         horizonte_solicitado=horizonte_solicitado,
-        metadatos_auditoria=metadatos_auditoria,
     )
-    horizonte_info["salvaguarda_benchmark"] = salvaguarda_benchmark
-    horizonte_reconciliado = int(horizonte_info.get("horizonte_finalmente_permitido") or 0)
-    if horizonte_reconciliado <= 0:
-        factibilidad_bloqueada = dict(factibilidad)
-        factibilidad_bloqueada.update(
-            {
-                "factible": False,
-                "estado": "No recomendable",
-                "nivel_confianza_metodologica": "no recomendable",
-                "explicacion": (
-                    "La proyección no se genera porque el modelo final aplicado no conserva "
-                    "un horizonte consecutivo con evidencia estadística suficiente."
-                ),
-            }
-        )
-        return _resultado_sin_proyeccion(
-            periodo_solicitado=periodo_solicitado,
-            horizonte_solicitado=horizonte_solicitado,
-            validacion_serie=validacion_serie,
-            analisis_serie=analisis_serie,
-            variables_derivadas=derivadas,
-            outliers=outliers,
-            factibilidad=factibilidad_bloqueada,
-            modelo=modelo,
-            candidatos=candidatos,
-            diagnostico_residuos=diagnostico_residuos,
-            backtesting=backtesting,
-            backtesting_comparativo=backtesting_comparativo,
-            backtesting_por_modelo=backtesting_por_modelo,
-            politica_modelos=politica_modelos,
-            catalogo_modelos=catalogo_modelos,
-            horizonte_info=horizonte_info,
-            explicacion=factibilidad_bloqueada["explicacion"],
-        )
-    if horizonte_reconciliado != horizonte_solicitado:
-        # N-1, 18-08-2026 (correccion unica final N-1, reauditoria V-CODEX-R2).
-        # "el maximo permitido como escenario" atribuia la causa al campo
-        # horizonte_maximo_permitido_como_escenario (siempre 0/no identificado,
-        # ver comentario H-4 en determinar_horizonte_maximo_estadistico).
-        # `horizonte_reconciliado` viene de `horizonte_finalmente_permitido`,
-        # que en esta rama vale `max_admisible` (_mayor_horizonte_permitido):
-        # el horizonte y el numero eran correctos, la causa atribuida no.
-        explicacion_restriccion = (
-            f"La proyección para h={horizonte_solicitado} no fue generada porque supera el máximo "
-            f"admisible con la evidencia fuera de muestra disponible (h={horizonte_reconciliado})."
-        )
-        factibilidad_restringida = dict(factibilidad)
-        factibilidad_restringida.update(
-            {
-                "factible": False,
-                "estado": "No admisible",
-                "nivel_confianza_metodologica": "no recomendable",
-                "explicacion": explicacion_restriccion,
-                "razones_tecnicas": _deduplicar_local(
-                    list(factibilidad.get("razones_tecnicas", [])) + [explicacion_restriccion]
-                ),
-            }
-        )
-        return _resultado_sin_proyeccion(
-            periodo_solicitado=periodo_solicitado,
-            horizonte_solicitado=horizonte_solicitado,
-            validacion_serie=validacion_serie,
-            analisis_serie=analisis_serie,
-            variables_derivadas=derivadas,
-            outliers=outliers,
-            factibilidad=factibilidad_restringida,
-            candidatos=candidatos,
-            diagnostico_residuos=diagnostico_residuos,
-            backtesting=backtesting,
-            backtesting_comparativo=backtesting_comparativo,
-            backtesting_por_modelo=backtesting_por_modelo,
-            politica_modelos=politica_modelos,
-            catalogo_modelos=catalogo_modelos,
-            horizonte_info=horizonte_info,
-            explicacion=explicacion_restriccion,
-        )
-    horizonte_info["razones"] = _deduplicar_local(list(horizonte_info.get("razones", [])))
-    factibilidad["horizonte_maximo_sugerido"] = int(horizonte_info.get("horizonte_maximo_recomendado") or 0)
+    mensaje_alcance = (
+        f"Alcance máximo de proyección de SAVIP: {H_OPERATIVO_MAX} meses. El límite de "
+        f"{H_OPERATIVO_MAX} meses corresponde al alcance operativo definido para la "
+        "herramienta y no constituye una frontera estadística universal de predictibilidad."
+    )
+    horizonte_info = {
+        "alcance_maximo_proyeccion": H_OPERATIVO_MAX,
+        "mensaje_alcance": mensaje_alcance,
+        "n0_backtesting": N0_BACKTESTING,
+        "w_estrella": int(matriz["w_estrella"]),
+        "pares_comunes": seleccion["pares_comunes"],
+        "pares_esperados": seleccion["pares_esperados"],
+        "horizonte_solicitado": horizonte_solicitado,
+        "horizonte_finalmente_permitido": horizonte_permitido,
+        "modelo_seleccionado": modelo_codigo,
+        # Metrica DECISIVA: agregada 1..24 sobre el rectangulo, la que decidio
+        # el modelo. "Modelo seleccionado" / "Modelo con menor RMSE OOS en la
+        # evaluación común de 1 a 24 meses" -no "modelo estadísticamente
+        # superior"-, siguiendo el Prompt 09 (varias competencias estrechas,
+        # sin prueba formal de significancia).
+        "rmse_seleccion_oos": seleccion["rmse_seleccion_oos"],
+        "modelo_segundo": seleccion["modelo_segundo"],
+        "rmse_segundo_oos": seleccion["rmse_segundo_oos"],
+        "diferencia_absoluta_segundo": seleccion["diferencia_absoluta"],
+        # INFORMATIVA, no umbral de empate ni regla de seleccion nueva (item 7).
+        "diferencia_porcentual_segundo": seleccion["diferencia_porcentual"],
+        "razones": [],
+        "salvaguarda_benchmark": {"intentada": False, "activada": False},
+    }
+    factibilidad["horizonte_maximo_sugerido"] = H_OPERATIVO_MAX
     factibilidad["estado_proyeccion"] = {
         "estado": factibilidad.get("estado"),
-        "horizonte_maximo_recomendado": horizonte_info.get("horizonte_maximo_recomendado"),
-        "horizonte_maximo_permitido": horizonte_info.get("horizonte_maximo_permitido"),
-        "horizonte_maximo_permitido_como_escenario": horizonte_info.get("horizonte_maximo_permitido_como_escenario"),
-        "horizonte_maximo_admisible": horizonte_info.get("horizonte_maximo_admisible"),
-        "horizonte_maximo_evaluado": horizonte_info.get("horizonte_maximo_evaluado"),
-        "limite_operativo_evaluacion": horizonte_info.get("horizonte_maximo_busqueda_configurado"),
-        "accion": horizonte_info.get("accion"),
+        "alcance_maximo_proyeccion": H_OPERATIVO_MAX,
+        "w_estrella": int(matriz["w_estrella"]),
+        "modelo_seleccionado": modelo_codigo,
+        "rmse_seleccion_oos": seleccion["rmse_seleccion_oos"],
     }
-    if horizonte_permitido >= horizonte_solicitado:
-        factibilidad["advertencias"] = [
-            a for a in factibilidad.get("advertencias", [])
-            if "horizonte solicitado supera" not in str(a).lower()
-        ]
     t_permitido = t_ultimo + horizonte_permitido
     periodo_proj = t_a_periodo(t_permitido, anio_base).strip()
     t_futuro = np.arange(t_ultimo + 1, t_permitido + 1, dtype=float)
     last_obs = float(y_obs[-1])
-    y_futuro = proyectar_modelo(modelo, t_futuro, forzar_desde=None)
+
+    # Reajuste UNICO con toda la serie historica (ya en `modelo`, ajustado
+    # arriba sobre t_obs/y_obs completos) y UNA sola trayectoria interna de
+    # H_OPERATIVO_MAX meses (item 8). El horizonte solicitado NUNCA reajusta ni
+    # reselecciona: solo extrae el segmento correspondiente de esta trayectoria
+    # (item 9), de modo que pedir 6, 12, 17 o 24 meses da el mismo modelo, el
+    # mismo RMSE de seleccion y los mismos valores en los meses comunes.
+    t_futuro_24 = np.arange(t_ultimo + 1, t_ultimo + H_OPERATIVO_MAX + 1, dtype=float)
+    trayectoria_24_meses = proyectar_modelo(modelo, t_futuro_24, forzar_desde=None)
+    y_futuro = np.asarray(trayectoria_24_meses[:horizonte_permitido], dtype=float)
 
     calendario = _ajustar_salto_anual(
         serie=serie_trabajo,
@@ -1231,6 +1406,17 @@ def _ejecutar_proyeccion_base(
         "horizonte_solicitado": horizonte_solicitado,
         "horizonte_permitido": horizonte_permitido,
         "horizonte_info": horizonte_info,
+        # post-r1-metodologia-12-24: alcance operativo y trayectoria interna
+        # completa 1..24, generada una sola vez con el modelo unico reajustado
+        # sobre toda la historia. `rmse_seleccion_oos` es la metrica que decidio
+        # el modelo (item 10); `backtesting["metricas"]["rmse"]` de mas abajo es
+        # la evidencia propia del horizonte solicitado, NO la decisiva.
+        "alcance_maximo_proyeccion": H_OPERATIVO_MAX,
+        "trayectoria_24_meses": [float(v) for v in trayectoria_24_meses],
+        "rmse_seleccion_oos": seleccion["rmse_seleccion_oos"],
+        "modelo_segundo": seleccion["modelo_segundo"],
+        "rmse_segundo_oos": seleccion["rmse_segundo_oos"],
+        "diferencia_porcentual_segundo": seleccion["diferencia_porcentual"],
         "model_name": model_name,
         "modelo_codigo": modelo.get("nombre"),
         # P0-G: el estado metodológico y los bloqueos vigentes viajan con el
@@ -1296,7 +1482,7 @@ def _ejecutar_proyeccion_base(
         "politica_modelos": politica_modelos,
         "catalogo_modelos": catalogo_modelos,
         "parametros_modelo": modelo.get("parametros", {}),
-        "salvaguarda_benchmark": salvaguarda_benchmark,
+        "salvaguarda_benchmark": {"intentada": False, "activada": False},
         "advertencias_categorizadas": _categorizar_advertencias(
             validacion_serie=validacion_serie,
             outliers=outliers,

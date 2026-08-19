@@ -792,7 +792,7 @@ class WidgetEmpalmeICCPICOCIV(QWidget):
         solicitado = proyeccion.get("resultado_horizonte_solicitado") or {}
         indice_final = solicitado.get("indice_proyectado")
         if not solicitado.get("proyeccion_generada") or indice_final is None:
-            razon = solicitado.get("razon_principal") or "Revise el estado del horizonte y el máximo recomendado en la pestaña de proyección."
+            razon = solicitado.get("razon_principal") or "Revise el estado del horizonte y el alcance máximo de proyección en la pestaña de proyección."
             raise ValueError(
                 "No fue posible usar la fecha final solicitada porque el módulo de proyección no considera viable ese horizonte. "
                 f"{razon}"

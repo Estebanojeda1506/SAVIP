@@ -622,7 +622,7 @@ class VentanaPrincipal(QMainWindow):
                 # renombra: un rotulo con ese titulo y «No aplica» debajo se lee
                 # como un dato que falta, no como una decision metodologica.
                 ("ic95", "Intervalo de predicción"),
-                ("maximo", "Máximo recomendado"),
+                ("maximo", "Alcance máximo de proyección"),
             )
         ):
             tarjeta, valor = self._crear_tarjeta_kpi(etiqueta)
@@ -803,10 +803,10 @@ class VentanaPrincipal(QMainWindow):
         info = proyeccion.get("analisis_horizontes_completo") or proyeccion.get("horizonte_info") or {}
         generado = bool(solicitado.get("proyeccion_generada"))
         indice = solicitado.get("indice_proyectado")
-        maximo = info.get("horizonte_maximo_recomendado")
+        # post-r1-metodologia-12-24, 19-08-2026 (Prompt 10): alcance operativo
+        # fijo (24 meses), no un maximo derivado de evidencia por horizonte.
+        maximo = info.get("alcance_maximo_proyeccion")
         maximo_texto = f"{int(maximo)} meses" if maximo else "No identificado"
-        if maximo and info.get("maximo_recomendado_es_limite_observado"):
-            maximo_texto += " (dentro de grilla evaluada)"
         self.valores_kpi["indice"].setText(
             self._formatear_metrica(indice) if generado else "No generado"
         )
@@ -1923,7 +1923,7 @@ class VentanaPrincipal(QMainWindow):
             "modelo": "Selección del modelo",
             "estado": "Estado del horizonte",
             "ic95": "Intervalo de predicción",
-            "maximo": "Máximo recomendado",
+            "maximo": "Alcance máximo de proyección",
         }
         html = construir_html_explicacion_tarjeta(
             clave,

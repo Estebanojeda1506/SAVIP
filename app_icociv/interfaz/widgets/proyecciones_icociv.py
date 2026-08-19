@@ -73,7 +73,7 @@ COLUMNAS_PROYECCIONES = [
     ("fecha_inicial_proyeccion", "Fecha inicial de proyección"),
     ("fecha_final_proyeccion", "Fecha final de proyección"),
     ("horizonte_solicitado", "Horizonte solicitado"),
-    ("maximo_recomendado", "Máximo recomendado"),
+    ("maximo_recomendado", "Alcance máximo de proyección"),
     ("modelo", "Modelo seleccionado"),
     ("indice_base", "Índice base"),
     ("indice_proyectado", "Índice proyectado"),
@@ -574,7 +574,7 @@ def _extraer_contexto(resultado_ui: dict[str, Any]) -> dict[str, Any]:
     proyeccion = resultado_ui.get("proyeccion", {}) or {}
     solicitado = proyeccion.get("resultado_horizonte_solicitado", {}) or {}
     info = proyeccion.get("analisis_horizontes_completo") or proyeccion.get("horizonte_info") or {}
-    if "horizonte_maximo_recomendado" not in info:
+    if "alcance_maximo_proyeccion" not in info:
         info = proyeccion.get("horizonte_info", {}) or {}
     serie_df = resultado_ui.get("serie_df")
     indice_base = None
@@ -604,7 +604,7 @@ def _extraer_contexto(resultado_ui: dict[str, Any]) -> dict[str, Any]:
         "fecha_inicial_proyeccion": periodo_ini_proy,
         "fecha_final_proyeccion": periodo_fin_proy,
         "horizonte_solicitado": solicitado.get("horizonte_solicitado"),
-        "maximo_recomendado": info.get("horizonte_maximo_recomendado"),
+        "maximo_recomendado": info.get("alcance_maximo_proyeccion"),
         "estado": solicitado.get("estado"),
         "modelo": solicitado.get("modelo_aplicado") or proyeccion.get("model_name"),
         "metricas": metricas,
