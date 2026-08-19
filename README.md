@@ -147,7 +147,15 @@ automáticamente la matriz publicada en el documento y
 | `docs/claude/` | Documentación técnica: arquitectura, mapa de módulos, métodos estadísticos, empalme, pruebas, empaquetado y sistema visual |
 | `MANIFIESTO_REPOSITORIO.md` | Qué contiene este repositorio y qué se dejó fuera |
 
-El documento final se compila desde su carpeta con:
+El documento final se compila desde su carpeta con `latexmk`, que decide por sí
+mismo cuántas pasadas hacen falta y evita dejar un *rerun* pendiente:
+
+```bash
+latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex
+```
+
+Si `latexmk` no está disponible, la secuencia manual equivalente —verificada
+para que converja sin *rerun* pendiente— es:
 
 ```bash
 pdflatex -interaction=nonstopmode -halt-on-error main.tex && bibtex main && pdflatex -interaction=nonstopmode -halt-on-error main.tex && pdflatex -interaction=nonstopmode -halt-on-error main.tex

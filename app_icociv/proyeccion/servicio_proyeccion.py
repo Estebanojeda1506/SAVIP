@@ -615,13 +615,21 @@ def _retirar_intervalo_de_publicacion(resultado: dict[str, Any]) -> dict[str, An
     mientras se declara que no están sustentados es la incoherencia que la
     estrategia C2 retira.
 
-    Se retira la PUBLICACIÓN, no el cálculo. La banda se sigue calculando y
-    sigue siendo decisoria donde lo era: ``_evaluar_intervalos_prediccion`` la
-    lee en las líneas 865 y 1818, dentro de ``_ejecutar_proyeccion_base``. Este
-    corte va DESPUÉS de todos esos lectores -por eso vive en
-    ``ejecutar_proyeccion`` y no en ``_construir_tabla_proyecciones``-, de modo
-    que no puede alterar ninguna decisión estadística: es una restricción de
-    implementación de la categoría D del §3, no una regla metodológica.
+    Se retira la PUBLICACIÓN, no el cálculo. La banda se sigue calculando
+    dentro de ``_ejecutar_proyeccion_base``, y este corte va DESPUÉS de todos
+    sus lectores -por eso vive en ``ejecutar_proyeccion`` y no en
+    ``_construir_tabla_proyecciones``-, de modo que no puede alterar ninguna
+    decisión estadística: es una restricción de implementación de la
+    categoría D del §3, no una regla metodológica.
+
+    CORREGIDO 18-08-2026 (H-8, auditoria final V-CODEX-R2). Decia "sigue
+    siendo decisoria donde lo era". Eso fue cierto hasta el 12-08-2026 (P0-G):
+    desde entonces la amplitud, la cobertura y los límites de la banda NO
+    deciden nada -ni el punto ni la clasificación del horizonte-. Lo único que
+    sobrevive es que la comprobación de finitud de la banda incluye al propio
+    pronóstico puntual (ver ``_clasificar_evidencia_horizonte``), de modo que
+    un punto no finito bloquea; eso es una imposibilidad del punto, detectada
+    de paso por ese cálculo, no una decisión de la banda sobre sí misma.
 
     Las claves y columnas se conservan con valor ``None``. Ni se eliminan -hay
     consumidores legítimos que comprueban la forma del contrato sin publicar el
@@ -2469,7 +2477,10 @@ def _clasificar_evidencia_horizonte(
     rrmse_drift = _numero_finito(comparacion.get("rrmse_drift"))
     rmae_naive = _numero_finito(comparacion.get("rmae_naive"))
     rmae_drift = _numero_finito(comparacion.get("rmae_drift"))
-    umbrales = _umbrales_incertidumbre(horizonte)
+    # H-8, 18-08-2026 (auditoria final V-CODEX-R2). Se retira
+    # `umbrales = _umbrales_incertidumbre(horizonte)`: se calculaba y no se
+    # leia en ningun punto de esta funcion (los nueve cortes que describia
+    # dejaron de decidir el 08-08-2026; ver comentario mas abajo).
 
     permitido = bool(factibilidad.get("factible", False))
     bloqueo_duro = False
@@ -2629,8 +2640,12 @@ def _clasificar_evidencia_horizonte(
     )
     if not permitido and not bloqueo_duro and evidencia_predictiva_ok:
         permitido = True
+        # H-1A, 18-08-2026 (auditoria final V-CODEX-R2). Decia "...el desempeño
+        # fuera de muestra y los intervalos son razonables": el motivo real,
+        # documentado arriba, es la EXISTENCIA de evidencia (>=1 ventana y una
+        # metrica de error finita), no los intervalos.
         advertencias.append(
-            "La factibilidad base tenia advertencias diagnosticas; se permite el horizonte porque el desempeño fuera de muestra y los intervalos son razonables."
+            "La factibilidad base tenia advertencias diagnosticas; se permite el horizonte porque existe evidencia fuera de muestra (ventanas y error finitos)."
         )
     if relativo_favorable:
         advertencias = [
@@ -2704,32 +2719,30 @@ def _clasificar_evidencia_horizonte(
         )
     else:
         estado, confianza = _estado_por_horizonte(horizonte, ancho, cautelas)
-        permitido_tecnico = estado != "Escenario de alta incertidumbre"
+        # H-4, 18-08-2026 (auditoria final V-CODEX-R2). Aqui existian dos ramas
+        # que comparaban `estado` contra "Escenario de alta incertidumbre" y
+        # contra {"Escenario estadístico extendido", "Proyección extendida"}.
+        # `_estado_por_horizonte` no produce esos valores desde el CIERRE
+        # 08-08-2026 (devuelve solo el tramo objetivo: "Horizonte corto/medio/
+        # extendido (con/sin advertencias)"), de modo que ambas ramas eran
+        # inalcanzables y las clasificaciones "escenario_alta_incertidumbre" y
+        # "extendida_cautela" nunca llegaban a publicarse, pese a que la tesis
+        # las describia como estados posibles. Retiradas.
+        permitido_tecnico = True
         permitido_escenario = True
         no_recomendable = False
-        if estado == "Escenario de alta incertidumbre":
-            decision = "Permitido solo como escenario de alta incertidumbre"
-            clasificacion = "escenario_alta_incertidumbre"
-            mensaje = (
-                f"El horizonte h={horizonte} se clasifica como escenario de alta incertidumbre; "
-                "la trayectoria central es referencia técnica y debe leerse junto con las bandas. "
-                "No se recomienda usarlo como proyección técnica principal."
-            )
-        elif estado in {"Escenario estadístico extendido", "Proyección extendida"}:
-            decision = "Permitido para proyección técnica"
-            clasificacion = "extendida_cautela" if int(horizonte) >= 7 else "tecnica_cautela"
-            mensaje = (
-                f"El horizonte h={horizonte} se permite como {_tipo_uso_horizonte(horizonte).lower()} "
-                "porque el backtesting y los intervalos ofrecen evidencia suficiente."
-            )
-        elif cautelas:
+        if cautelas:
             decision = "Permitido para proyección técnica con cautela"
             clasificacion = "tecnica_cautela"
             mensaje = "Se permite proyección con cautela; las advertencias quedan registradas en el informe."
         else:
             decision = "Permitido para proyección técnica"
             clasificacion = "tecnica_alta"
-            mensaje = "La proyección es defendible para el horizonte evaluado según backtesting e intervalos."
+            # H-1A, 18-08-2026 (auditoria final V-CODEX-R2). Decia "...segun
+            # backtesting e intervalos": el intervalo no es fundamento vigente
+            # de ninguna decision (P0-C). Sustituido por lo que realmente la
+            # sostiene: el backtesting y la evidencia fuera de muestra.
+            mensaje = "La proyección es defendible para el horizonte evaluado según backtesting y evidencia fuera de muestra."
 
     return {
         "permitido": permitido,
@@ -2892,9 +2905,16 @@ def seleccionar_modelo_por_rmse_oos_global(
     el orden de aparicion del banco, que es estable y reproducible. No se
     prefiere por identidad, complejidad, horizonte ni ninguna metrica auxiliar.
 
-    Si la muestra comun queda vacia devuelve ``None``, igual que la regla
-    anterior cuando no habia evidencia: el llamador cae entonces en la
-    seleccion por horizonte, que es el camino que ya existia para ese caso.
+    Si la muestra comun queda vacia devuelve ``None``.
+
+    CORREGIDO 18-08-2026 (H-8, auditoria final V-CODEX-R2). Este parrafo decia
+    que, en ese caso, "el llamador cae... en la seleccion por horizonte, que
+    es el camino que ya existia". Eso describia `_modelo_trayectoria_consistente`
+    (la regla ponderada 1/h, retirada el 08-08-2026), pero el unico llamador
+    vigente, `_modelo_consistente_desde_comparativo`, no tiene ningun
+    mecanismo de reserva: si esta funcion devuelve ``None``, el llamador
+    tambien devuelve ``None``. No existe una "seleccion por horizonte" a la
+    que caer.
     """
     errores_por_modelo = _errores_oos_por_par(backtesting_comparativo, horizontes)
     if not errores_por_modelo:
@@ -3446,9 +3466,12 @@ def _serializar_evaluaciones_horizonte(evaluaciones: list[dict[str, Any]]) -> li
         if no_recomendable:
             motivo = mensaje or "evidencia insuficiente por horizonte"
         elif permitido_escenario and not permitido_tecnico:
-            motivo = mensaje or "permitido solo como escenario de alta incertidumbre"
+            motivo = mensaje or "permitido solo como escenario, con evidencia limitada"
         else:
-            motivo = mensaje or "backtesting e intervalos aceptables para proyección técnica"
+            # H-1A, 18-08-2026 (auditoria final V-CODEX-R2). Fallback solo para
+            # datos sin `mensaje_horizonte` propio; ya no cita el intervalo
+            # retirado como fundamento.
+            motivo = mensaje or "backtesting y evidencia fuera de muestra suficientes para proyección técnica"
         salida.append(
             {
                 "horizonte": item.get("horizonte"),

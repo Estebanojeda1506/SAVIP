@@ -703,11 +703,23 @@ def evaluar_factibilidad_proyeccion(
     advertencias = _deduplicar_textos(advertencias)
     bloqueos_proyeccion = _deduplicar_textos(bloqueos_proyeccion)
 
+    # H-3, 18-08-2026 (auditoria final V-CODEX-R2). Aqui vivian dos recortes mas
+    # de `horizonte_maximo` sin fuente: continuidad -> tope 3, y presencia de la
+    # palabra "autocorrelación" en advertencias/razones -> tope 6. El segundo
+    # convertia un diagnostico (Ljung-Box) en un recorte de horizonte por
+    # coincidencia de texto, exactamente lo que la metodologia congelada
+    # prohibe para los diagnosticos residuales. Ninguno de los dos sobrevivia
+    # aguas abajo como valor decisivo -el horizonte maximo real lo calcula
+    # `determinar_horizonte_maximo_estadistico` con W/evidencia fuera de
+    # muestra, y sobrescribe a este en cada punto de consumo (ver
+    # servicio_proyeccion.py, asignaciones a `factibilidad["horizonte_maximo_sugerido"]`
+    # y a `factibilidad["estado_proyeccion"]`)-, pero la ADVERTENCIA que
+    # generaban si SI llegaba a publicarse y afectaba la clasificacion
+    # (`tecnica_alta` -> `tecnica_cautela`). Retirados ambos recortes y, mas
+    # abajo, la advertencia que producian. Ljung-Box y la continuidad de la
+    # serie se siguen calculando y publicando como diagnostico, sin recortar
+    # ningun horizonte.
     horizonte_maximo = _horizonte_base_por_longitud(n)
-    if validacion.get("continuidad_temporal") != "OK":
-        horizonte_maximo = min(horizonte_maximo, 3)
-    if any("autocorrelación" in a.lower() for a in advertencias + razones):
-        horizonte_maximo = min(horizonte_maximo, 6)
     # D-9: se retiran los recortes de horizonte por MAPE > 8 % y por MASE >= 0,8.
     # Ambos cortes eran internos y sin fuente.
     # P0-G, 16-08-2026 (V-CODEX-3). Aqui el ANCHO de la banda recortaba el
@@ -748,10 +760,12 @@ def evaluar_factibilidad_proyeccion(
         confianza = "descriptivo: sin advertencias registradas"
         factible = True
 
-    if factible and horizonte_solicitado > horizonte_maximo:
-        advertencias.append(
-            "El horizonte solicitado supera el rango estadísticamente defendible con la información disponible."
-        )
+    # H-3, 18-08-2026 (auditoria final V-CODEX-R2). Se retira la advertencia
+    # "supera el rango estadisticamente defendible": dependia de
+    # `horizonte_maximo`, que a su vez venia de la escalera de longitud sin
+    # fuente y de los dos recortes retirados arriba. El horizonte real que
+    # sostiene o no cada punto lo publica la evidencia fuera de muestra (W) por
+    # horizonte, no esta comparacion.
 
     puede_informe = True
     explicacion = (
@@ -984,13 +998,15 @@ def _explicacion_no_proyeccion(razones: list[str]) -> str:
 
 
 def _explicacion_factible(estado: str, horizonte: int, advertencias: list[str]) -> str:
-    if estado == "Proyectable":
-        return "La serie es proyectable: datos completos, backtesting estable e intervalos razonables."
-    if estado == "Solo proyección de corto plazo":
-        return (
-            f"Se permite proyección de corto plazo hasta {horizonte} mes(es) porque existe evidencia "
-            "predictiva limitada; no se recomienda ampliar el horizonte."
-        )
+    """Explica un resultado factible. Solo se llama con `factible=True`.
+
+    H-1A/H-4, 18-08-2026 (auditoria final V-CODEX-R2). Este `estado` solo toma
+    "Calculable con advertencias" o "Calculable sin advertencias" (ver arriba);
+    nunca "Proyectable" ni "Solo proyección de corto plazo". Las dos ramas que
+    comparaban contra esos literales eran inalcanzables -la primera, ademas,
+    citaba "intervalos razonables" como fundamento de un intervalo que la
+    aplicacion no publica-. Retiradas.
+    """
     if advertencias:
         return "Se permite proyección con cautela: " + " ".join(advertencias[:2])
     return "Se permite proyección con cautela bajo las restricciones metodologicas registradas."

@@ -12,7 +12,16 @@ El documento está concentrado en `main.tex`; no hay capítulos separados median
 
 ## Compilación
 
-Desde la carpeta del documento:
+Desde la carpeta del documento, con `latexmk` (decide por sí mismo cuántas
+pasadas hacen falta, incluida la bibliografía, y evita dejar un *rerun*
+pendiente):
+
+```bash
+latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex
+```
+
+Si `latexmk` no está disponible, la secuencia manual equivalente —verificada
+el 18-08-2026 para que converja sin *rerun* pendiente— es:
 
 ```bash
 pdflatex -interaction=nonstopmode -halt-on-error main.tex

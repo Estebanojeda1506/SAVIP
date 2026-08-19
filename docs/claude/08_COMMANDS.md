@@ -76,13 +76,22 @@ Este último comando está pendiente de verificar; `pytest` no estaba instalado.
 
 ```bash
 cd documentacion_latex/documento_tecnico_icociv_iccp
+latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex
+```
+
+`latexmk` decide por sí mismo cuántas pasadas hacen falta, incluida la
+bibliografía, y evita dejar un *rerun* pendiente. Si no está disponible, la
+secuencia manual equivalente —verificada el 18-08-2026 para que converja sin
+*rerun* pendiente— es:
+
+```bash
 pdflatex -interaction=nonstopmode -halt-on-error main.tex
 bibtex main
 pdflatex -interaction=nonstopmode -halt-on-error main.tex
 pdflatex -interaction=nonstopmode -halt-on-error main.tex
 ```
 
-`pdflatex` se verificó con MiKTeX. La secuencia completa con BibTeX es la requerida para actualizar citas y referencias; en esta migración se verificó una pasada de pdfLaTeX sobre auxiliares existentes.
+`pdflatex` se verificó con MiKTeX.
 
 ## Limpiar temporales LaTeX
 

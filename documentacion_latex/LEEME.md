@@ -30,13 +30,18 @@ anterior y no debe editarse ni citarse.
 
 ## Compilación
 
-Desde la carpeta del documento:
+Desde la carpeta del documento, con `latexmk` (decide por sí mismo cuántas
+pasadas hacen falta, incluida la bibliografía, y evita dejar un *rerun*
+pendiente):
 
 ```bash
-pdflatex -interaction=nonstopmode -halt-on-error main.tex
+latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex
 ```
 
-El documento final requiere además la secuencia con bibliografía:
+Documentos sin bibliografía propia pueden compilarse con una sola pasada de
+`pdflatex`. Si `latexmk` no está disponible, la secuencia manual equivalente
+para el documento final —verificada para que converja sin *rerun*
+pendiente— es:
 
 ```bash
 pdflatex -interaction=nonstopmode -halt-on-error main.tex && bibtex main && pdflatex -interaction=nonstopmode -halt-on-error main.tex && pdflatex -interaction=nonstopmode -halt-on-error main.tex

@@ -1755,7 +1755,7 @@ El objetivo de limitar proyecciones no es impedir el cálculo de corto plazo, si
     \item \textbf{Bandas del ancho relativo del IC95 (diagnóstico interno, no publicado).} Cada tramo de horizonte tiene tres bandas: aceptable, escenario con advertencia y bloqueo (por ejemplo, para \(h\leq3\): hasta 10\% aceptable, de 10\% a 30\% escenario y más de 30\% bloqueo; los límites crecen con el horizonte hasta 45\%--75\% para \(h>18\)). Estos cortes son criterios operativos internos y, con el intervalo retirado de las salidas, quedan como diagnóstico no publicado. El encadenamiento consecutivo que propagaba el bloqueo a los horizontes posteriores también se retiró: ninguna fuente exige que los horizontes válidos formen un prefijo.
 \end{itemize}
 
-Con estas reglas, el resultado de cada horizonte queda en uno de los estados siguientes: proyección recomendada, proyección admisible con advertencia, escenario de alta incertidumbre o no evaluable por inexistencia de ventanas. El estado \emph{bloqueado por desempeño} desapareció: ningún valor de una métrica cancela ya un horizonte, porque los cortes que lo hacían ---MAPE, sMAPE, proporción de errores inusuales, cocientes frente a los benchmarks y amplitud del intervalo--- carecían de fuente que autorizara esa consecuencia y hoy se publican con su valor. Cuando se niega un horizonte, el mensaje identifica el horizonte afectado y la causa, que solo puede ser una de dos, ambas imposibilidades y no juicios de calidad: que el pronóstico puntual no sea finito, o que no exista el dato con el que evaluarlo ---es decir, $W = 0$, lo que ocurre exactamente cuando $h > n - N_0$---. Ninguna magnitud de error, ninguna amplitud y ningún recuento intermedio de ventanas niegan un horizonte.
+Con estas reglas, el resultado de cada horizonte queda en uno de tres estados: permitido sin advertencias, permitido con advertencias registradas, o no evaluable. Una clasificación de tres niveles previa incluía un cuarto nivel intermedio ---``escenario de alta incertidumbre'', entre la advertencia y la no evaluabilidad---, pero la comparación que lo distinguía dejó de coincidir con ningún valor real desde el cierre del 08-08-2026, de modo que ese cuarto nivel había quedado inalcanzable; el código correspondiente se retiró en esta revisión. El estado \emph{bloqueado por desempeño} desapareció: ningún valor de una métrica cancela ya un horizonte, porque los cortes que lo hacían ---MAPE, sMAPE, proporción de errores inusuales, cocientes frente a los benchmarks y amplitud del intervalo--- carecían de fuente que autorizara esa consecuencia y hoy se publican con su valor. Cuando se niega un horizonte, el mensaje identifica el horizonte afectado y la causa, que solo puede ser una de dos, ambas imposibilidades y no juicios de calidad: que el pronóstico puntual no sea finito, o que no exista el dato con el que evaluarlo ---es decir, $W = 0$, lo que ocurre exactamente cuando $h > n - N_0$---. Ninguna magnitud de error, ninguna amplitud y ningún recuento intermedio de ventanas niegan un horizonte.
 
 \begin{table}[H]
 \centering
@@ -1765,7 +1765,7 @@ Con estas reglas, el resultado de cada horizonte queda en uno de los estados sig
 \begin{adjustbox}{max width=\textwidth}
 \begin{tabular}{rrlrrl}
 \toprule
-\textbf{\(h\)} & \textbf{\(J_h\)} & \textbf{Modelo} & \textbf{RMSE} & \textbf{MAPE} & \textbf{Clasificación} \\
+\textbf{\(h\)} & \textbf{\(J_h\)} & \textbf{Modelo} & \textbf{RMSE} & \textbf{MAPE} & \textbf{Uso comunicado} \\
 \midrule
 1 & 55 & Drift & 1,0874 & 0,5855\% & Proyección operativa \\
 3 & 53 & Drift & 2,2318 & 1,3208\% & Proyección operativa \\
@@ -1777,7 +1777,7 @@ Con estas reglas, el resultado de cada horizonte queda en uno de los estados sig
 \end{adjustbox}
 \end{table}
 
-En este caso real, el máximo recomendado y el máximo admisible coinciden en 55 meses: con \(n=61\) y \(N_0=6\), la cota de existencia \(h\leq n-N_0\) es exactamente ese valor, y ningún horizonte dentro de ella resulta no recomendable. El horizonte de 18 meses se permite como proyección técnica con cautela, la misma clasificación que reciben los demás horizontes de esta serie; que el modelo seleccionado sea Drift queda registrado como advertencia descriptiva ---"el método seleccionado es un benchmark/escenario simple"---, pero esa nota no degrada ni limita el horizonte. El ejemplo demuestra que el máximo no se fija a priori ni depende del tipo de modelo ganador: depende únicamente de la evidencia fuera de muestra disponible para cada horizonte. La interfaz debe comunicar el estado exacto del horizonte solicitado y no convertir la advertencia de un horizonte en bloqueo global de los demás.
+Conviene distinguir dos columnas que se leen fácilmente como una sola. El \emph{uso comunicado} (última columna) depende únicamente de la longitud del horizonte y crece de ``proyección operativa'' a ``escenario estadístico extendido'' según la tabla \ref{tab:matriz_conceptual}; no es una clasificación estadística ni una puerta. La \emph{clasificación estadística} interna, en cambio, es la misma en las cinco filas: los cinco horizontes están permitidos con advertencias registradas (``técnica con cautela''), porque el modelo seleccionado es Drift y esa condición por sí sola añade una advertencia descriptiva ---``el método seleccionado es un benchmark/escenario simple''---, sin degradar ni limitar ningún horizonte. En este caso real, el máximo recomendado y el máximo admisible coinciden en 55 meses: con \(n=61\) y \(N_0=6\), la cota de existencia \(h\leq n-N_0\) es exactamente ese valor, y ningún horizonte dentro de ella resulta no recomendable. El ejemplo demuestra que el máximo no se fija a priori ni depende del tipo de modelo ganador: depende únicamente de la evidencia fuera de muestra disponible para cada horizonte. La interfaz debe comunicar el estado exacto del horizonte solicitado y no convertir la advertencia de un horizonte en bloqueo global de los demás.
 
 \subsubsection{Tratamiento y presentación de resultados}
 
@@ -1791,7 +1791,7 @@ La reproducibilidad se comprobó conservando periodo, valor proyectado, modelo, 
 \begin{adjustbox}{max width=\textwidth}
 \begin{tabular}{lrlrrrl}
 \toprule
-\textbf{Periodo} & \textbf{Proyectado} & \textbf{Modelo} & \textbf{\(h\)} & \textbf{Factor} & \textbf{\(W\)} & \textbf{Uso comunicado} \\
+\textbf{Periodo} & \textbf{Proyectado} & \textbf{Modelo} & \textbf{\(h\)} & \textbf{Factor de actualización} & \textbf{\(W\)} & \textbf{Uso comunicado} \\
 \midrule
 2026-02 & 140,8567 & Drift & 1 & 1,0047 & 55 & Proyección operativa \\
 2026-03 & 141,5133 & Drift & 2 & 1,0094 & 54 & Proyección operativa \\
@@ -2046,6 +2046,7 @@ MASE=\frac{2,8712}{0,6639}=4,3249.
 \textbf{Interpretación.} Los errores porcentuales son bajos en la escala de esta ruta, pero MASE mayor que uno indica que Drift no supera de manera uniforme la referencia naive escalada. Por tanto, el ranking no puede basarse solo en MAPE. El resultado es conforme porque las métricas se calculan por horizonte, controlan denominadores y permanecen disponibles para comparar modelos.
 
 \subsubsection{Diagnóstico residual e intervalos}
+\label{sec:diagnostico_residual_intervalos}
 
 \textbf{Procedimiento.} Cuando un candidato produce residuos suficientes, la aplicación calcula sesgo, Durbin--Watson y diagnósticos de autocorrelación; los hallazgos generan advertencias y no se usan para borrar observaciones. La inspección del módulo confirmó que estos diagnósticos alimentan la explicación del resultado.
 
@@ -2369,6 +2370,8 @@ Los resultados deben interpretarse con base en métricas, horizonte viable, evid
 
 Cuando el panel indique que un horizonte es recomendable, de cautela, escenario o no recomendable, el usuario debe leer esa clasificación junto con las métricas y el estado metodológico. Debe tenerse presente que esta versión no publica intervalo de predicción: la incertidumbre del valor mostrado no viene acotada, y esa ausencia es una limitación declarada, no un descuido de la salida. Un valor puntual puede parecer razonable, pero si el horizonte aparece como escenario o como no recomendable, la proyección no debe usarse como resultado técnico principal sin justificación adicional.
 
+\textbf{Sobre los identificadores ``P0-C'' y ``P0-E'' en los mensajes.} Algunos mensajes de advertencia citan estos dos identificadores internos, y conviene que el lector sepa qué representan sin necesidad de consultar el repositorio del proyecto. No son métricas ni criterios estadísticos nuevos: son los nombres con que este trabajo registra dos limitaciones metodológicas que se declaran explícitamente, en lugar de resolverse con una regla sin sustento. \textbf{P0-C} identifica la ausencia de una construcción de intervalo de predicción adoptable bajo la configuración vigente: la banda que la aplicación calcula internamente no tiene un método completo y sustentado, y por eso no se publica como intervalo institucional (véase la discusión completa en la sección \ref{sec:diagnostico_residual_intervalos}). \textbf{P0-E} identifica que el primer origen de la validación temporal, \(N_0\), no está determinado por ninguna fuente ni derivación suficiente —es una configuración provisional, no un mínimo de identificabilidad demostrado— (véase la sección de limitaciones, \ref{sec:limitaciones_encontradas}). Que un mensaje mencione P0-C o P0-E no cambia el modelo, el pronóstico ni el horizonte entregados: es la aplicación siendo transparente sobre qué parte de su propio procedimiento sigue sin cerrar.
+
 Si la serie presenta un patrón recurrente de cambio de año, el panel lo informa explícitamente. El panel separa dos hechos que no son el mismo. El primero es que la serie presente el patrón, propiedad que se determina con las transiciones diciembre--enero observadas y que no depende de lo que se pida proyectar. El segundo es que ese patrón tenga efecto dentro del horizonte solicitado, lo cual ocurre únicamente cuando alguno de los pasos proyectados cae en enero. A estos dos se suma un tercero, que es el \emph{efecto del tratamiento} y exige simultáneamente que el tratamiento se aplique y que el horizonte contenga al menos un enero. Como esta versión no aplica el tratamiento en ningún caso, ese tercer hecho es siempre negativo, incluso cuando el horizonte sí cruza enero; el panel lo dice explícitamente para que no se lea una cosa por otra. La distinción evita además interpretar como ausencia de patrón lo que solo es ausencia de efecto en un horizonte corto. En consecuencia la trayectoria mostrada es la del modelo base: los valores de enero no se elevan ni los del resto del año se reducen. El usuario debe conservar esta información junto con el resto de la evidencia.
 
 \begin{table}[H]
@@ -2465,6 +2468,7 @@ El principal aporte es integrar consulta, análisis, proyección, empalme y traz
 La herramienta puede apoyar revisiones técnicas de variaciones de precios, organización de índices y generación de reportes.
 
 \subsection{Limitaciones encontradas}
+\label{sec:limitaciones_encontradas}
 
 \subsubsection*{Limitación metodológica central: el primer origen de la validación temporal}
 

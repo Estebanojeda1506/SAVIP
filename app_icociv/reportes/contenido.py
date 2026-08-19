@@ -748,25 +748,34 @@ def _seccion_seleccion_modelo(datos: DatosProyeccion) -> Seccion:
     resultado = datos.resultado
     bloques: list[Any] = []
     justificacion = str(resultado.get("justificacion_modelo") or "").strip()
+    # H-7, 18-08-2026 (auditoria final V-CODEX-R2). El fallback decia "...
+    # ponderado por horizonte: pesa mas acertar en los primeros meses que en
+    # los ultimos", describiendo una ponderacion 1/h que no es el criterio de
+    # seleccion vigente (RMSE OOS global sobre muestra comun, sin ponderar).
     bloques.append(Parrafo(justificacion or (
-        "El modelo se selecciona comparando el error de pronóstico fuera de muestra de todos los "
-        "candidatos, ponderado por horizonte: pesa más acertar en los primeros meses que en los últimos."
+        "El modelo se selecciona por el menor RMSE fuera de muestra sobre la muestra común de todos "
+        "los candidatos, sin ponderar por horizonte."
     )))
     salvaguarda = resultado.get("salvaguarda_benchmark") or {}
     if salvaguarda.get("intentada"):
-        if salvaguarda.get("activada"):
-            bloques.append(Parrafo(
-                f"Se aplicó la salvaguarda con benchmarks: el modelo principal "
-                f"({texto_o(salvaguarda.get('modelo_principal'), 'no registrado')}) no superó los criterios en algún "
-                f"horizonte, por lo que se aplicó {texto_o(salvaguarda.get('modelo_final'), 'el modelo de respaldo')} "
-                f"a toda la trayectoria. El horizonte admisible pasó de "
-                f"{formato_entero(salvaguarda.get('h_max_antes'))} a {formato_entero(salvaguarda.get('h_max_despues'))} meses."
-            ))
-        else:
-            bloques.append(Parrafo(
-                "Se evaluó la salvaguarda con benchmarks: ni el modelo principal ni los benchmarks Drift y "
-                "Naive cumplieron los criterios, de modo que el bloqueo se mantiene."
-            ))
+        # H-2, 18-08-2026 (auditoria final V-CODEX-R2). Las dos ramas que aqui
+        # existian describian una sustitucion ("se aplico {modelo} a toda la
+        # trayectoria", "el horizonte admisible paso de X a Y") que la
+        # salvaguarda no realiza: `activada` nunca es True en el codigo
+        # vigente y el modelo/horizonte nunca cambian. La rama que SI se
+        # ejecutaba afirmaba ademas "ni... cumplieron los criterios" sin
+        # comprobar si algun benchmark si habia ampliado el alcance.
+        habria_ampliado = bool(salvaguarda.get("benchmark_habria_ampliado"))
+        bloques.append(Parrafo(
+            "Se evaluó la salvaguarda con benchmarks como referencia diagnóstica: el modelo principal "
+            f"({texto_o(salvaguarda.get('modelo_principal'), 'no registrado')}) no fue recomendable en algún "
+            "horizonte. " + (
+                "Al menos un benchmark alcanzaría un horizonte mayor, pero esto no sustituye el modelo "
+                "entregado: el modelo publicado sigue siendo el de la selección por RMSE fuera de muestra."
+                if habria_ampliado
+                else "Ningún benchmark alcanzaría un horizonte mayor que el modelo principal."
+            )
+        ))
     descartes = [str(d) for d in (resultado.get("descartes_modelos") or [])]
     if descartes:
         bloques.append(Vinetas(descartes[:10]))

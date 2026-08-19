@@ -109,8 +109,9 @@ TOOLTIPS_TECNICOS = {
     "anio": "Año calendario del periodo que se desea proyectar.",
     "mes": "Mes calendario del periodo que se desea proyectar.",
     "horizonte": (
-        "Horizonte solicitado en meses. La aplicación valida por backtesting e intervalos "
-        "si el horizonte es recomendable, debe restringirse o se permite como escenario."
+        "Horizonte solicitado en meses. La aplicación valida por backtesting y evidencia "
+        "fuera de muestra si el horizonte es recomendable o si debe restringirse por falta "
+        "de evidencia."
     ),
     "ejecutar": "Ejecuta la selección de tabla, construye la serie histórica y calcula la proyección.",
     "sesion": "Guarda o recupera una sesión JSON con selección, parámetros, serie y resultados.",

@@ -828,20 +828,29 @@ def _bloque_advertencias(proyeccion: dict[str, Any]) -> str:
 
 
 def _bloque_salvaguarda_benchmark(proyeccion: dict[str, Any]) -> str:
-    """Informa cuando un benchmark sustituyo al modelo principal antes de bloquear."""
+    """Informa el resultado diagnóstico de reevaluar Drift y Naive ante un horizonte no recomendable.
+
+    H-2, 18-08-2026 (auditoria final V-CODEX-R2). El docstring y el texto de
+    este bloque afirmaban una sustitucion que la funcion que los alimenta
+    (`_aplicar_salvaguarda_benchmarks`) no realiza desde el CIERRE 08-08-2026:
+    devuelve siempre el mismo modelo y el mismo horizonte, sin cambiarlos.
+    `salvaguarda["activada"]` nunca pasa a `True` en el codigo vigente -es un
+    campo heredado de la conducta retirada-, de modo que la rama que aqui
+    existia para "activada=True" era inalcanzable, y la rama que SI se
+    ejecutaba siempre afirmaba "los benchmarks tampoco los cumplieron" sin
+    comprobar si algun benchmark si habia ampliado el alcance. Reescrito para
+    describir la conducta real: diagnostico que no sustituye nada.
+    """
     salvaguarda = proyeccion.get("salvaguarda_benchmark") or {}
     if not salvaguarda.get("intentada"):
         return ""
-    activada = bool(salvaguarda.get("activada"))
     filas = [
-        ("Modelo principal seleccionado", salvaguarda.get("modelo_principal"), ""),
-        ("Motivo del fallo", _resumir(salvaguarda.get("razon_fallo_principal"), 220), ""),
-        ("Modelo finalmente aplicado", salvaguarda.get("modelo_final"), ""),
-        ("Horizonte admisible antes", salvaguarda.get("h_max_antes"), ""),
-        ("Horizonte admisible después", salvaguarda.get("h_max_despues"), ""),
+        ("Modelo principal (sin cambios)", salvaguarda.get("modelo_principal"), ""),
+        ("Motivo del horizonte no recomendable", _resumir(salvaguarda.get("razon_fallo_principal"), 220), ""),
+        ("Horizonte máximo admisible del modelo principal", salvaguarda.get("h_max_antes"), ""),
     ]
     for item in salvaguarda.get("benchmarks_evaluados") or []:
-        estado = "cumple" if item.get("cumple") else "no cumple"
+        estado = "amplía el alcance" if item.get("cumple") else "no amplía el alcance"
         filas.append(
             (
                 f"Benchmark {item.get('nombre')}",
@@ -850,15 +859,18 @@ def _bloque_salvaguarda_benchmark(proyeccion: dict[str, Any]) -> str:
                 "",
             )
         )
+    habria_ampliado = bool(salvaguarda.get("benchmark_habria_ampliado"))
     nota = (
-        "El modelo principal no superó los criterios en algún horizonte. Antes de bloquear la serie "
-        "se evaluaron los benchmarks Drift y Naive con los mismos umbrales, del más conservador al "
-        "menos conservador según su error fuera de muestra."
-        if activada
-        else "El modelo principal no superó los criterios y los benchmarks tampoco los cumplieron: "
-        "el bloqueo se mantiene por falta de alternativa admisible."
+        "El modelo principal no fue recomendable en algún horizonte. Se reevaluaron los benchmarks "
+        "Drift y Naive como referencia diagnóstica; "
+        + (
+            "al menos uno alcanzaría un horizonte mayor, pero esto no sustituye el modelo entregado: "
+            "el modelo publicado sigue siendo el de la selección por RMSE fuera de muestra."
+            if habria_ampliado
+            else "ninguno alcanzaría un horizonte mayor que el modelo principal."
+        )
     )
-    return _tabla_clave_valor("Salvaguarda con benchmarks", filas, nota=nota)
+    return _tabla_clave_valor("Salvaguarda con benchmarks (diagnóstico)", filas, nota=nota)
 
 
 def _bloque_ajuste_calendario(proyeccion: dict[str, Any]) -> str:
