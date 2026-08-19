@@ -9,13 +9,21 @@
 Concepto & Definición operativa & Valor real & Uso en la aplicación \\
 \midrule
 Horizonte solicitado & Meses pedidos por el usuario. & 18 & Resultado principal. \\
-Máximo recomendado & Último h técnico consecutivo desde h=1. & 12 & Límite de proyección técnica. \\
-Máximo como escenario & Último h clasificado explícitamente como escenario. & 20 & Escenario de alta incertidumbre. \\
+Máximo recomendado & Mayor h clasificado como técnico, exista o no un hueco antes. & 20 & Límite de proyección técnica. \\
+Máximo admisible & Mayor h permitido con evidencia propia, exista o no un hueco antes. & 20 & Coincide con el máximo recomendado por construcción en el evaluador vigente. \\
 Máximo evaluado & Último h con evaluación fuera de muestra. & 20 & Borde de la grilla evaluada. \\
 Límite operativo & Máximo configurado para la auditoría. & 30 & Control computacional, no recomendación. \\
 Primer no viable & Primer h evaluado y clasificado como no admisible. & No identificado & Punto explícito de bloqueo. \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
+% H-4/P0-H residual, 18-08-2026 (micro-remediacion final post-R2 residual). La
+% fila "Maximo como escenario" describia un tercer estado retirado
+% ("Escenario de alta incertidumbre"). Ademas, ni "maximo recomendado" ni
+% "maximo admisible" exigen ya continuidad desde h=1 (P0-H, 16-08-2026): cada
+% horizonte se juzga con su propia evidencia, haya o no un hueco antes. Con
+% permitido_como_escenario == permitido_para_proyeccion_tecnica siempre en el
+% evaluador vigente, ambos maximos son el mismo valor por construccion, no
+% solo porque esta serie carezca de huecos (ver "Primer no viable").
 \par\footnotesize\textit{Fuente: Elaboración propia con datos extraídos del anexo oficial ICOCIV del DANE y cálculos reproducibles de la aplicación.}
 \end{table}

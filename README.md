@@ -139,7 +139,6 @@ automáticamente la matriz publicada en el documento y
 | `documentacion_latex/documento_tecnico_icociv_iccp/` | **Documento final del trabajo de grado** |
 | `documentacion_latex/criterios_estadisticos_aplicacion/` | Anexo de criterios con fórmula, fuente y prueba |
 | `documentacion_latex/guia_academica_estadistica/` | Guía académica del análisis estadístico |
-| `documentacion_latex/ejemplo_numerico_vias_urbanas/` | Ejemplo numérico reproducible |
 | `documentacion_latex/documentacion_tecnica_modulos/` | Documentación técnica de módulos |
 | `documentacion_latex/LEEME.md` | Índice y estado de cada documento |
 | `docs/referencias/` | Matriz de referencias y manifiesto de fuentes externas |

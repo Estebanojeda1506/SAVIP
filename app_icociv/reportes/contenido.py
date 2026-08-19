@@ -365,11 +365,17 @@ def interpretacion(datos: DatosProyeccion) -> list[str]:
     # P0-C / C2: las cuatro redacciones remitian al intervalo de predicción como
     # apoyo de lectura. Esta versión no lo publica, de modo que remitir a él
     # enviaría al lector a un dato que no está en el informe.
+    # P0-G, 12-08-2026: la escalera alto/medio/bajo se retiro de
+    # `_estado_por_horizonte`, que hoy devuelve "descriptivo: <tramo>,
+    # <detalle>" en vez de esas tres palabras sueltas. Estas claves solo
+    # coinciden por el valor de respaldo "medio"; se conserva el diccionario
+    # como texto de respaldo, sin la redaccion "escenario exploratorio" que
+    # nombraba el estado retirado.
     confianza = texto_o(solicitado.get("nivel_confianza"), "").lower()
     uso = {
         "alto": "El resultado es utilizable como referencia técnica en planeación y análisis presupuestal.",
         "medio": "El resultado es utilizable con cautela: conviene contrastarlo con criterio profesional antes de tomar decisiones.",
-        "bajo": "El resultado debe usarse solo como escenario exploratorio.",
+        "bajo": "El resultado debe interpretarse con cautela reforzada, junto con las advertencias del informe.",
     }.get(confianza, "El resultado debe interpretarse junto con las advertencias del informe.")
     parrafos.append(f"Nivel de confianza metodológica: {texto_o(solicitado.get('nivel_confianza'), 'no determinado')}. {uso}")
     return parrafos

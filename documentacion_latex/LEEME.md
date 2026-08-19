@@ -14,13 +14,23 @@ mover o descartar.
 |---|---|---|---|
 | `documento_tecnico_icociv_iccp/` | **Documento final del trabajo de grado.** Único entregable académico. | Vigente | 119 |
 | `guia_academica_estadistica/` | Guía académica del análisis estadístico y predictivo. Apoyo metodológico, no entregable. | Vigente | — |
-| `ejemplo_numerico_vias_urbanas/` | Ejemplo numérico reproducible completo (Vías urbanas, h=18) con datos reales. | Vigente | 12 |
 | `documentacion_tecnica_modulos/` | Documentación técnica de los módulos de la aplicación. | Vigente | — |
 | `criterios_estadisticos_aplicacion/` | Documento de estudio independiente: todos los criterios estadísticos con fórmula, fuente, implementación y prueba. Su contenido está **integrado en el cuerpo de la tesis** (marco teórico y metodología, Sección "Catálogo auditable de criterios"); este documento se conserva para estudiarlo por separado. Tabla generada desde el módulo interno de criterios. | Vigente | 17 |
 | `evidencia_metodologica_cumplimiento/` | Documento de respaldo con la matriz de trazabilidad metodológica (antiguo apartado 3.14 de la tesis, extraído para no recargar el cuerpo). | Vigente | 3 |
 
 El anexo `documento_tecnico_icociv_iccp/anexos/flujo_estadistico_aplicacion.tex`
 (6 páginas) explica el flujo estadístico y se compila por separado.
+
+`ejemplo_numerico_vias_urbanas/` se retiró el 18-08-2026 (micro-remediación
+final post-R2 residual): no lo referenciaba ningún otro documento del
+repositorio, no se compilaba desde ningún script, y dependía de
+`anex-ICOCIV-may2026.xlsb` y de un CSV auxiliar que no existen en este
+checkout, de modo que sus cifras no eran reproducibles con los artefactos
+finales disponibles. Describía además una metodología de horizonte
+superada (contigüidad obligatoria, umbral de ventanas retirado, intervalos
+publicados, cuarto estado "escenario de alta incertidumbre"). El ejemplo
+numérico vigente de la serie Vías urbanas vive en la tesis final, Tablas 23
+y 24 de `documento_tecnico_icociv_iccp/main.tex`.
 
 ## Cómo saber cuál es la última versión
 

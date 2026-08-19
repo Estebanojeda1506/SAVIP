@@ -572,10 +572,14 @@ def generar_tablas(destino: Path, localizada: SerieLocalizada, analisis: dict[st
                 escapar_tex(e.get("modelo_final_aplicado")),
                 fmt(e.get("rmse"), 4),
                 (
+                    # H-4 residual, 18-08-2026 (micro-remediacion final post-R2
+                    # residual). Se retira la rama "Escenario -- solo escenario":
+                    # permitido_como_escenario == permitido_para_proyeccion_tecnica
+                    # siempre en el evaluador vigente, de modo que nunca se
+                    # alcanzaba (mismo invariante de determinar_horizonte_maximo_
+                    # estadistico en app_icociv/proyeccion/servicio_proyeccion.py).
                     "Técnico -- permitir"
                     if e.get("permitido_para_proyeccion_tecnica")
-                    else "Escenario -- solo escenario"
-                    if e.get("permitido_como_escenario")
                     else "No admisible -- negar"
                 ),
             ]
@@ -623,10 +627,14 @@ def generar_tablas(destino: Path, localizada: SerieLocalizada, analisis: dict[st
                 fmt(e.get("mape"), 4, "\\%"),
                 fmt(e.get("ic95_relativo"), 4),
                 (
+                    # H-4 residual, 18-08-2026 (micro-remediacion final post-R2
+                    # residual). Se retira la rama "Escenario -- solo escenario":
+                    # permitido_como_escenario == permitido_para_proyeccion_tecnica
+                    # siempre en el evaluador vigente, de modo que nunca se
+                    # alcanzaba (mismo invariante de determinar_horizonte_maximo_
+                    # estadistico en app_icociv/proyeccion/servicio_proyeccion.py).
                     "Técnico -- permitir"
                     if e.get("permitido_para_proyeccion_tecnica")
-                    else "Escenario -- solo escenario"
-                    if e.get("permitido_como_escenario")
                     else "No admisible -- negar"
                 ),
             ]
@@ -643,9 +651,17 @@ def generar_tablas(destino: Path, localizada: SerieLocalizada, analisis: dict[st
         "tab:ejemplo_resumen_horizontes_vias_urbanas",
         ["Concepto", "Definición operativa", "Valor real", "Uso en la aplicación"],
         [
+            # H-4/P0-H residual, 18-08-2026 (micro-remediacion final post-R2
+            # residual). "Maximo como escenario" nombraba un estado retirado, y
+            # "consecutivo desde h=1" describia una continuidad que P0-H
+            # (16-08-2026) retiro de ambos maximos: cada horizonte se juzga con
+            # su propia evidencia, exista o no un hueco antes. La fila lee ahora
+            # `horizonte_maximo_admisible` (de `_mayor_horizonte_permitido`), no
+            # `horizonte_maximo_permitido_como_escenario` (de `max_escenario_puro`,
+            # que busca clasificaciones retiradas y por eso vale 0 siempre).
             ["Horizonte solicitado", "Meses pedidos por el usuario.", str(info_h.get("horizonte_solicitado") or "No aplica"), "Resultado principal."],
-            ["Máximo recomendado", "Último h técnico consecutivo desde h=1.", str(info_h.get("horizonte_maximo_recomendado") or "No identificado"), "Límite de proyección técnica."],
-            ["Máximo como escenario", "Último h clasificado explícitamente como escenario.", str(info_h.get("horizonte_maximo_permitido_como_escenario") or "No identificado"), "Escenario de alta incertidumbre."],
+            ["Máximo recomendado", "Mayor h clasificado como técnico, exista o no un hueco antes.", str(info_h.get("horizonte_maximo_recomendado") or "No identificado"), "Límite de proyección técnica."],
+            ["Máximo admisible", "Mayor h permitido con evidencia propia, exista o no un hueco antes.", str(info_h.get("horizonte_maximo_admisible") or "No identificado"), "Coincide con el máximo recomendado por construcción en el evaluador vigente."],
             ["Máximo evaluado", "Último h con evaluación fuera de muestra.", str(info_h.get("horizonte_maximo_evaluado") or "No identificado"), "Borde de la grilla evaluada."],
             ["Límite operativo", "Máximo configurado para la auditoría.", str(info_h.get("horizonte_maximo_busqueda_configurado") or "No aplica"), "Control computacional, no recomendación."],
             ["Primer no viable", "Primer h evaluado y clasificado como no admisible.", str(info_h.get("primer_horizonte_no_viable") or "No identificado"), "Punto explícito de bloqueo."],

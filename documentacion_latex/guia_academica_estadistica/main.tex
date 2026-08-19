@@ -140,11 +140,15 @@ El procedimiento implementado separa la solicitud del usuario, la evaluación es
 
     \item \textbf{Selección del modelo final.} Se priorizan desempeño fuera de muestra, comparación frente a Naive y Drift, estabilidad, sesgo, incertidumbre, errores disponibles y coherencia de trayectoria. AIC o AICc se usan dentro de familias comparables, no como sustituto del backtesting \citep{hyndman_khandakar2008,hyndman2021fpp3}.
 
-    \item \textbf{Intervalos de predicción.} Se calcula el intervalo de prediccion del 95\,\% con los errores fuera de muestra del horizonte exacto y del modelo pertinentes; la banda interna del 80\,\% solo interviene en la envolvente y no se publica. Si la evidencia OOS no alcanza y se usa un respaldo in-sample, el informe lo identifica como limitación \citep{hyndman2021fpp3}.
+    % H-1/H-4 residual, 18-08-2026 (micro-remediacion final post-R2 residual).
+    % El intervalo se describia como calculo activo sin aclarar que no se
+    % publica (P0-C); "se presenta solo como escenario" nombraba un estado
+    % retirado; la UI se describia mostrando intervalos, que tampoco publica.
+    \item \textbf{Intervalos de predicción.} El intervalo de predicción del 95\,\% se calculó como método estudiado, con los errores fuera de muestra del horizonte exacto y del modelo pertinentes; esta versión no lo publica porque su sustento no está completo \citep{hyndman2021fpp3}.
 
-    \item \textbf{Decisión final.} La aplicación permite una proyección técnica, la presenta solo como escenario, restringe el alcance o la niega. Si el horizonte solicitado no es admisible, no genera una trayectoria de otro horizonte como si respondiera a la solicitud.
+    \item \textbf{Decisión final.} La aplicación permite una proyección técnica, con o sin advertencias registradas, restringe el alcance o la niega. Si el horizonte solicitado no es admisible, no genera una trayectoria de otro horizonte como si respondiera a la solicitud.
 
-    \item \textbf{Presentación en interfaz e informes.} La UI muestra el índice solicitado, estado, modelo e intervalos cuando fueron generados. El detalle técnico presenta métricas, criterios de selección, evaluación por horizonte y advertencias.
+    \item \textbf{Presentación en interfaz e informes.} La UI muestra el índice solicitado, estado y modelo cuando fueron generados. El detalle técnico presenta métricas, criterios de selección, evaluación por horizonte y advertencias.
 
     \item \textbf{Exportables y trazabilidad.} PDF, DOCX, HTML y CSV registran ruta, serie, modelo, parámetros, métricas, horizonte solicitado, máximos clasificados, razón de parada y advertencias, de modo que el análisis pueda ser revisado y reproducido.
 \end{enumerate}
@@ -191,9 +195,14 @@ Walk-forward & Validacion fuera de muestra que respeta pasado-futuro. & En cada 
 \addlinespace
 Metricas de error & Cuantifican magnitud, penalizacion y escala del error. & Calcula MAE, RMSE, MAPE, sMAPE, MASE, sesgo y comparaciones relativas por horizonte. & Ninguna metrica decide sola; se leen conjuntamente \citep{hyndman_koehler2006}. \\
 \addlinespace
-Intervalo del 95\,\% & Comunica incertidumbre alrededor del pronostico puntual; es la unica banda publicada. & Usa errores fuera de muestra por horizonte, con metodo empirico centrado por defecto si hay suficientes errores. & Bandas amplias indican incertidumbre; no deben ocultarse ni reducirse artificialmente \citep{hyndman2021fpp3}. \\
+% H-1/H-4 residual, 18-08-2026 (micro-remediacion final post-R2 residual). La
+% fila del intervalo lo describia como "la unica banda publicada" -no se
+% publica, P0-C-, y la fila de horizonte dinamico listaba intervalos, sesgo,
+% estabilidad y errores extremos como lo que decide el maximo, cuando el
+% evaluador vigente decide solo por backtesting y evidencia fuera de muestra.
+Intervalo del 95\,\% & Comunica incertidumbre alrededor del pronostico puntual; se estudio como metodo, pero esta version no lo publica. & Usa errores fuera de muestra por horizonte, con metodo empirico centrado por defecto si hay suficientes errores. & El sustento del metodo no esta completo; queda como diagnostico interno \citep{hyndman2021fpp3}. \\
 \addlinespace
-Horizonte dinamico & Determina hasta donde la proyeccion es defendible. & Evalua mensualmente errores, intervalos, sesgo, estabilidad, errores extremos y numero de ventanas. & Es un criterio operativo interno sustentado en evaluación fuera de muestra; la solicitud del usuario no fija el máximo recomendado \citep{tashman2000}. \\
+Horizonte dinamico & Determina hasta donde la proyeccion es defendible. & Evalua mensualmente el backtesting y la evidencia fuera de muestra por horizonte; errores, sesgo, estabilidad y errores extremos se publican como informacion complementaria. & Es un criterio operativo interno sustentado en evaluación fuera de muestra; la solicitud del usuario no fija el máximo recomendado \citep{tashman2000}. \\
 \addlinespace
 \multicolumn{4}{p{0.92\linewidth}}{\footnotesize\textit{Fuente: Elaboración propia con base en \citet{tashman2000}, \citet{hyndman2021fpp3}, \citet{hyndman_koehler2006} e \citet{nist_outliers}.}}\\
 \bottomrule
@@ -737,7 +746,9 @@ La app tambien puede usar un intervalo empirico centrado. Primero centra los err
 e^c_{r,h}=e_{r,h}-\bar{e}_h.
 \]
 
-Luego usa percentiles 10 y 90 para la banda interna del 80\,\%, y percentiles 2.5 y 97.5 para la banda del 95\,\% que se publica. Este metodo es el preferido cuando hay suficientes errores fuera de muestra por horizonte, porque evita bandas artificialmente unilaterales si los errores historicos tienen sesgo, practica documentada en la evaluacion de incertidumbre predictiva por horizonte \citep{hyndman2021fpp3}.
+% H-1 residual, 18-08-2026 (micro-remediacion final post-R2 residual). "la
+% banda del 95% que se publica" afirmaba una publicacion que P0-C retiro.
+Luego usa percentiles 10 y 90 para la banda interna del 80\,\%, y percentiles 2.5 y 97.5 para la banda del 95\,\% -esta versión no publica ninguna de las dos, P0-C-. Este metodo es el preferido cuando hay suficientes errores fuera de muestra por horizonte, porque evita bandas artificialmente unilaterales si los errores historicos tienen sesgo, practica documentada en la evaluacion de incertidumbre predictiva por horizonte \citep{hyndman2021fpp3}.
 
 Un tercer metodo es el intervalo empirico asimetrico, que usa percentiles directos de \(e_{r,h}\) sin centrar. Puede ser util si se desea conservar el sesgo historico de los errores, pero debe explicarse si produce bandas muy asimetricas.
 
@@ -778,12 +789,15 @@ La aplicacion distingue los siguientes conceptos operativos:
 
 \begin{itemize}[leftmargin=*]
     \item \textbf{Horizonte solicitado}: meses pedidos por el usuario; es una solicitud de análisis.
-    \item \textbf{Horizonte máximo recomendado}: último horizonte numéricamente consecutivo desde \(h=1\) clasificado como proyección técnica admisible.
-    % H-4 residual, 18-08-2026 (reauditoria dirigida V-CODEX-R2 residual). La
-    % clasificacion "escenario de alta incertidumbre" se retiro; el campo
+    % H-4/P0-H residual, 18-08-2026 (micro-remediacion final post-R2 residual).
+    % Ninguno de los dos maximos exige continuidad desde h=1 (P0-H, 16-08-2026):
+    % cada horizonte se juzga con su propia evidencia. La clasificacion
+    % "escenario de alta incertidumbre" tambien se retiro; el campo
     % permitido_como_escenario coincide siempre con permitido_para_proyeccion_
-    % tecnica, de modo que este maximo no distingue ya un tercer estado.
-    \item \textbf{Horizonte máximo admisible}: último horizonte permitido con evidencia propia, sin exigir que la secuencia de horizontes permitidos sea consecutiva desde \(h=1\).
+    % tecnica, de modo que ambos maximos son hoy el mismo valor por
+    % construccion.
+    \item \textbf{Horizonte máximo recomendado}: mayor horizonte clasificado como proyección técnica, exista o no un hueco antes.
+    \item \textbf{Horizonte máximo admisible}: mayor horizonte permitido con evidencia propia, exista o no un hueco antes.
     \item \textbf{Horizonte máximo evaluado}: último \(h\) para el cual fue posible ejecutar la evaluación; no equivale automáticamente a una recomendación.
     \item \textbf{Límite operativo}: máximo configurado para evitar una búsqueda indefinida; tampoco equivale a una recomendación.
     \item \textbf{Primer horizonte no viable}: primer \(h\) evaluado y clasificado como no admisible.
@@ -798,9 +812,17 @@ AnchoRelativoIC95_h=
 \frac{IC95_{sup,h}-IC95_{inf,h}}{|\yhat_{T+h}|}.
 \]
 
-El horizonte maximo depende de criterios operativos internos basados en errores por horizonte, numero de iteraciones validas, sesgo, estabilidad, errores extremos, comparacion con benchmarks y coherencia de la trayectoria. Estos criterios se derivan de la logica de evaluacion fuera de muestra por horizonte \citep{tashman2000} y del principio de que la incertidumbre predictiva suele crecer con el horizonte \citep{hyndman2021fpp3}. Los umbrales concretos son reglas internas documentadas, no parametros universales. El máximo recomendado se obtiene únicamente del tramo técnico consecutivo; el máximo como escenario se obtiene del tramo clasificado como escenario; ninguno se rellena con el último horizonte evaluado.
+% H-4/H-1 residual, 18-08-2026 (micro-remediacion final post-R2 residual). El
+% parrafo distinguia "maximo recomendado" de "maximo como escenario" como dos
+% tramos de clasificacion distintos, y citaba sesgo/estabilidad/errores
+% extremos/benchmarks como fundamento del horizonte maximo. El evaluador
+% vigente decide unicamente por backtesting y evidencia fuera de muestra por
+% horizonte; esas otras metricas se publican como informacion complementaria.
+% El tercer estado "escenario" ya no existe: ver el comentario H-4 en
+% ejemplo_resumen_horizontes_vias_urbanas.tex.
+El horizonte máximo se calcula dinámicamente con backtesting walk-forward y evidencia fuera de muestra por horizonte \citep{tashman2000}, bajo el principio de que la incertidumbre predictiva suele crecer con el horizonte \citep{hyndman2021fpp3}; errores por horizonte, sesgo, estabilidad y comparación con benchmarks se publican como información complementaria, sin decidir el máximo. El máximo recomendado es el mayor horizonte clasificado como técnico y el máximo admisible es el mayor horizonte permitido con evidencia propia, exista o no un hueco antes de cualquiera de los dos (P0-H): ninguno se cancela por el fallo de un horizonte anterior. Tampoco se rellenan con el último horizonte evaluado.
 
-Cuando no se identifica ningún horizonte no viable dentro de la grilla, el informe debe indicar la razón de parada. Si la evaluación terminó por falta de evidencia, el máximo evaluado solo representa el borde de la auditoría. No demuestra validez para horizontes superiores ni reemplaza la clasificación técnica o de escenario.
+Cuando no se identifica ningún horizonte no viable dentro de la grilla, el informe debe indicar la razón de parada. Si la evaluación terminó por falta de evidencia, el máximo evaluado solo representa el borde de la auditoría: no demuestra validez para horizontes superiores.
 
 \input{tablas/ejemplo_resumen_horizontes_vias_urbanas.tex}
 \input{tablas/ejemplo_horizonte_maximo_vias_urbanas.tex}
@@ -859,13 +881,26 @@ Los ejemplos distribuidos en las secciones anteriores se calcularon con la serie
 
 La evidencia aplicada se organiza en tablas referenciables: validacion de datos (Tabla \ref{tab:ejemplo_validacion_vias_urbanas}), descriptivos (Tabla \ref{tab:ejemplo_descriptivos_vias_urbanas}), variacion mensual y acumulada (Tablas \ref{tab:ejemplo_variacion_mensual_vias_urbanas} y \ref{tab:ejemplo_variacion_acumulada_vias_urbanas}), deteccion de atipicos (Tabla \ref{tab:ejemplo_outliers_vias_urbanas}), pronosticos Naive y Drift (Tablas \ref{tab:ejemplo_naive_vias_urbanas} y \ref{tab:ejemplo_drift_vias_urbanas}), trazabilidad Holt (Tablas \ref{tab:ejemplo_holt_lineal_vias_urbanas}, \ref{tab:ejemplo_holt_amortiguado_vias_urbanas} y \ref{tab:ejemplo_holt_comparacion_vias_urbanas}), walk-forward (Tabla \ref{tab:ejemplo_walkforward_vias_urbanas}), metricas y MASE (Tablas \ref{tab:ejemplo_metricas_vias_urbanas} y \ref{tab:ejemplo_mase_vias_urbanas}), benchmarks y seleccion (Tablas \ref{tab:ejemplo_benchmarks_vias_urbanas} y \ref{tab:ejemplo_seleccion_modelo_vias_urbanas}), intervalos y horizontes (Tablas \ref{tab:ejemplo_intervalos_vias_urbanas}, \ref{tab:ejemplo_resumen_horizontes_vias_urbanas} y \ref{tab:ejemplo_horizonte_maximo_vias_urbanas}) y reproducibilidad exportable (Tabla \ref{tab:ejemplo_reproducibilidad_vias_urbanas}).
 
-En esta ejecución real se solicitaron 18 meses. La clasificación técnica consecutiva alcanzó \(h=12\), el tramo de escenario llegó a \(h=20\) y el máximo evaluado también fue \(h=20\). La coincidencia de estos dos últimos valores no los convierte en el mismo concepto: uno procede de la clasificación explícita de escenario y el otro de la disponibilidad de ventanas fuera de muestra.
+% H-4/P0-H residual, 18-08-2026 (micro-remediacion final post-R2 residual). El
+% parrafo original fijaba la clasificacion tecnica en h=12 y el "tramo de
+% escenario" en h=20, presentandolos como dos conceptos distintos, y sugeria
+% que "maximo recomendado" exige continuidad desde h=1 (P0-H la retiro de
+% ambos maximos el 16-08-2026: cada horizonte se juzga con su propia
+% evidencia). Ningun horizonte entre 1 y 20 quedo clasificado como no viable
+% en esta ejecucion (ver la columna "Estado y decision" de la Tabla
+% \ref{tab:ejemplo_horizonte_maximo_vias_urbanas}), de modo que bajo el
+% evaluador vigente los 20 horizontes son tecnicos por igual.
+En esta ejecución real se solicitaron 18 meses. Ningún horizonte entre 1 y 20 quedó clasificado como no viable, de modo que la clasificación técnica alcanzó \(h=20\), coincidiendo con el máximo evaluado. El máximo recomendado y el máximo admisible coinciden siempre en el evaluador vigente, exista o no un hueco de evidencia en la grilla: ambos se calculan sobre el mismo conjunto de horizontes permitidos.
 
 La sección no presenta una serie sustituta. Su función es consolidar que todos los cálculos de ejemplo provienen de la misma ruta y que los valores se generan de forma reproducible mediante el script \texttt{scripts/build\_overleaf\_examples.py}. Dicho script extrae la serie con el cargador oficial del backend, ordena los periodos cronológicamente, ejecuta las validaciones y produce los fragmentos LaTeX incluidos en este documento.
 
 \section{Presentación en la interfaz e informes ICOCIV}
 
-La aplicación presenta los resultados en dos niveles. El \textbf{resultado principal} responde al horizonte solicitado: informa si se generó la proyección, el periodo objetivo, el índice, el modelo, los intervalos y la razón de la decisión. El \textbf{análisis técnico completo} conserva la grilla mensual, las métricas, la clasificación, el máximo recomendado, el máximo como escenario, el máximo evaluado, el límite operativo y la razón de parada.
+% H-1/H-4 residual, 18-08-2026 (micro-remediacion final post-R2 residual). El
+% resultado principal citaba "los intervalos" -esta version no los publica,
+% P0-C- y el analisis completo citaba "el maximo como escenario" -estado
+% retirado, ver comentarios H-4 anteriores en este documento.
+La aplicación presenta los resultados en dos niveles. El \textbf{resultado principal} responde al horizonte solicitado: informa si se generó la proyección, el periodo objetivo, el índice, el modelo y la razón de la decisión. El \textbf{análisis técnico completo} conserva la grilla mensual, las métricas, la clasificación, el máximo recomendado, el máximo admisible, el máximo evaluado, el límite operativo y la razón de parada.
 
 Esta separación evita mostrar un resultado de otro horizonte como si respondiera a la solicitud y mantiene coherencia con la evaluación fuera de muestra por origen móvil \citep{tashman2000}. En los informes, el resumen ejecutivo presenta primero la solicitud y su decisión; las tablas y anexos desarrollan el análisis completo. Algunas situaciones frecuentes son:
 
@@ -926,9 +961,14 @@ Esta versión no publica intervalo de predicción: su método no está sustentad
 
 El analisis estadistico de la app \ICOCIV{} se fundamenta en una idea central: los indices de costos de obras civiles son series temporales economicas y deben evaluarse como tales. La preparacion de datos garantiza que la serie sea cronologicamente valida. La estadistica descriptiva permite comprender nivel, dispersion y variaciones. Los modelos de pronostico se comparan contra benchmarks simples. La seleccion se basa en errores fuera de muestra, no en complejidad ni en ajuste visual \citep{tashman2000,hyndman2021fpp3}.
 
-La validacion walk-forward aporta rigor porque simula decisiones historicas de pronostico. Las metricas MAE, RMSE, MAPE, sMAPE y MASE permiten leer el error desde perspectivas complementarias. Los residuos ayudan a diagnosticar patrones no capturados, mientras que el intervalo de prediccion del 95\,\% comunica la incertidumbre publicada.
+% H-1/H-4 residual, 18-08-2026 (micro-remediacion final post-R2 residual). El
+% primer parrafo afirmaba que el intervalo del 95% "comunica la
+% incertidumbre publicada" -no se publica, P0-C-. El segundo volvia a citar
+% "el maximo como escenario" y un tercer estado "se presenta como escenario"
+% -retirado, ver comentarios H-4 anteriores en este documento.
+La validacion walk-forward aporta rigor porque simula decisiones historicas de pronostico. Las metricas MAE, RMSE, MAPE, sMAPE y MASE permiten leer el error desde perspectivas complementarias. Los residuos ayudan a diagnosticar patrones no capturados; el intervalo de prediccion del 95\,\% se estudio como metodo, pero esta version no lo publica porque su sustento no esta completo.
 
-Finalmente, la determinacion dinamica del horizonte maximo evita dos errores: forzar proyecciones debiles y bloquear proyecciones defendibles. El horizonte solicitado se analiza sin alterar arbitrariamente la auditoría completa; el máximo recomendado, el máximo como escenario, el máximo evaluado y el límite operativo conservan significados distintos. Un horizonte se permite cuando existe evidencia suficiente, se presenta como escenario cuando su incertidumbre es alta y se niega cuando no es admisible. Este enfoque hace que la app sea mas trazable, pedagogica y defendible ante evaluacion academica.
+Finalmente, la determinacion dinamica del horizonte maximo evita dos errores: forzar proyecciones debiles y bloquear proyecciones defendibles. El horizonte solicitado se analiza sin alterar arbitrariamente la auditoría completa; el máximo recomendado, el máximo admisible, el máximo evaluado y el límite operativo conservan significados distintos. Un horizonte se permite cuando existe evidencia suficiente, con advertencias si la evidencia es limitada, y se niega cuando no es admisible. Este enfoque hace que la app sea mas trazable, pedagogica y defendible ante evaluacion academica.
 
 \newpage
 \section{Anexo: matriz de criterios metodológicos}

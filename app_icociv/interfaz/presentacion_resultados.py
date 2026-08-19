@@ -189,7 +189,10 @@ def construir_html_explicacion_tarjeta(
             ("Condiciones influyentes", evaluacion_solicitada.get("razon_decision") or solicitado.get("razones_tecnicas"), ""),
             ("Interpretación", _interpretacion_estado(solicitado.get("estado")), ""),
         ]
-        nota = "El estado resume si el horizonte puede usarse técnicamente, solo como escenario o si debe negarse."
+        # H-4 residual, 18-08-2026 (micro-remediacion final post-R2 residual). La
+        # nota describia una tercera salida "solo como escenario" que el estado
+        # ya no puede tomar (ver comentario H-4 en _interpretacion_estado).
+        nota = "El estado resume si el horizonte puede usarse técnicamente o si debe negarse."
         titulo = "Explicación del estado del horizonte"
     elif clave == "ic95":
         # P0-C / C2: no se lee la pareja de limites; no se publica.
@@ -204,6 +207,16 @@ def construir_html_explicacion_tarjeta(
         )
         titulo = "Incertidumbre: intervalo no publicado"
     else:
+        # H-4/P0-H residual, 18-08-2026 (micro-remediacion final post-R2
+        # residual). Esta tarjeta describia "maximo como escenario" como un
+        # tercer estado retirado, leyendo ademas `horizonte_maximo_permitido_
+        # como_escenario` -poblado desde `max_escenario_puro`, que busca
+        # clasificaciones ("escenario_alta_incertidumbre"/"escenario_
+        # estadistico") que `_clasificar_evidencia_horizonte` ya no produce, y
+        # por tanto vale 0 siempre-. El campo vigente y equivalente a "maximo
+        # admisible" es `horizonte_maximo_admisible` (de `_mayor_horizonte_
+        # permitido`, que ya no exige continuidad desde h=1 tras P0-H,
+        # 16-08-2026).
         filas = [
             (
                 "Máximo recomendado",
@@ -218,18 +231,17 @@ def construir_html_explicacion_tarjeta(
             (
                 "Base del máximo recomendado",
                 info.get("base_horizonte_maximo_recomendado")
-                or "Clasificación técnica consecutiva desde h=1",
+                or "Mayor horizonte clasificado como técnico, exista o no un hueco antes",
                 "",
             ),
             (
-                "Máximo como escenario",
-                _horizonte_identificado(info.get("horizonte_maximo_permitido_como_escenario")),
+                "Máximo admisible",
+                _horizonte_identificado(info.get("horizonte_maximo_admisible")),
                 "",
             ),
             (
-                "Base del máximo como escenario",
-                info.get("base_horizonte_maximo_escenario")
-                or "Clasificación de escenario consecutiva antes del corte",
+                "Base del máximo admisible",
+                "Mayor horizonte permitido con evidencia propia, exista o no un hueco antes",
                 "",
             ),
             ("Máximo evaluado", formatear_horizonte(info.get("horizonte_maximo_evaluado")), ""),
@@ -1258,15 +1270,18 @@ def _resultado_solicitado(proyeccion: dict[str, Any]) -> dict[str, Any]:
     solicitado = _entero(_coalesce(proyeccion.get("horizonte_solicitado"), info.get("horizonte_solicitado")))
     permitido = _entero(_coalesce(proyeccion.get("horizonte_permitido"), info.get("horizonte_finalmente_permitido")))
     generado = bool(proyeccion.get("proyeccion_generada", True)) and solicitado == permitido
-    accion_info = str(info.get("accion") or "").lower()
-    escenario = generado and "escenario" in accion_info
-    estado = "escenario" if escenario else "proyeccion_tecnica" if generado else "no_admisible"
+    # H-4 residual, 18-08-2026 (micro-remediacion final post-R2 residual). Esta
+    # rama de respaldo (solo se usa si falta "resultado_horizonte_solicitado")
+    # buscaba "escenario" en `horizonte_info["accion"]`. Esa accion ya no
+    # puede contener la palabra: `determinar_horizonte_maximo_estadistico` dejo
+    # de producir "permitir como escenario" (ver su comentario H-4 residual).
+    estado = "proyeccion_tecnica" if generado else "no_admisible"
     ultima = _ultima_fila(proyeccion.get("proyecciones"))
     return {
         "horizonte_solicitado": solicitado,
         "origen_horizonte": proyeccion.get("origen_horizonte", "predeterminado"),
         "estado": estado,
-        "accion": "permitir como escenario" if escenario else "permitir" if generado else "negar",
+        "accion": "permitir" if generado else "negar",
         "proyeccion_generada": generado,
         "indice_proyectado": _coalesce(ultima.get("indice_proyectado"), proyeccion.get("y_proj")) if generado else None,
         "periodo_proyectado": _coalesce(ultima.get("periodo"), proyeccion.get("periodo_proj")) if generado else None,
