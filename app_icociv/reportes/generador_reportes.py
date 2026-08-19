@@ -547,9 +547,12 @@ def _analisis_horizontes_completo(resultado: dict[str, Any]) -> dict[str, Any]:
 
 
 def _estado_horizonte_visible(estado: Any) -> str:
+    # H-4 residual, 18-08-2026 (reauditoria dirigida V-CODEX-R2 residual). Se
+    # retira la entrada "escenario": `_estructurar_resultado_horizontes` ya no
+    # produce ese estado (ver su comentario H-4 residual); mantenerla aqui
+    # presentaba un estado inalcanzable como si fuera una salida posible.
     return {
         "proyeccion_tecnica": "Proyección técnica",
-        "escenario": "Escenario de alta incertidumbre",
         "no_admisible": "No admisible",
     }.get(str(estado), str(estado or "No disponible"))
 
@@ -1051,10 +1054,15 @@ def _lineas_determinacion_horizonte(resultado: dict[str, Any]) -> list[str]:
     info = _analisis_horizontes_completo(resultado)
     trazabilidad = info.get("trazabilidad") or {}
     lineas = [
+        # H-1A/H-4A, 18-08-2026 (reauditoria dirigida V-CODEX-R2 residual). Estas
+        # cuatro lineas citaban "intervalos" como fundamento del horizonte
+        # maximo -retirado como criterio, P0-C- y "escenario de alta
+        # incertidumbre" como estado vigente -el productor real solo entrega
+        # tecnica_alta, tecnica_cautela o no_viable desde el 08-08-2026-.
         "18 meses es una opción operativa por defecto de la interfaz, no un límite estadístico fijo.",
-        "El horizonte máximo se calcula dinamicamente con backtesting, intervalos, sesgo, errores extremos, estabilidad y comparación contra benchmarks.",
-        "El máximo recomendado corresponde al último horizonte con fiabilidad técnica razonable para proyección principal.",
-        "Los horizontes superiores pueden quedar como escenario de alta incertidumbre o como no recomendables.",
+        "El horizonte máximo se calcula dinámicamente con backtesting y evidencia fuera de muestra (W); sesgo, errores extremos, estabilidad y comparación contra benchmarks se publican como información complementaria, sin decidir el horizonte.",
+        "El máximo recomendado corresponde al último horizonte con evidencia fuera de muestra suficiente para proyección técnica.",
+        "Los horizontes superiores pueden quedar como proyección técnica con advertencias registradas o como no recomendables.",
         info.get("mensaje_informe", info.get("mensaje", "")),
         f"Horizonte solicitado: {info.get('horizonte_solicitado', resultado.get('horizonte_solicitado', ''))} meses.",
         f"Horizontes evaluados mes a mes: {info.get('horizontes_evaluados', [])}.",
@@ -1098,14 +1106,16 @@ def _lineas_determinacion_horizonte(resultado: dict[str, Any]) -> list[str]:
             "por falta de evidencia fuera de muestra suficiente. Este valor no debe interpretarse "
             "como horizonte máximo recomendado."
         )
+    # H-4, 18-08-2026 (reauditoria dirigida V-CODEX-R2 residual). Se retira la
+    # rama que comparaba `permitido_como_escenario and not
+    # permitido_para_proyeccion_tecnica`: en el evaluador vigente ambos campos
+    # son siempre iguales para un mismo horizonte (`_clasificar_evidencia_
+    # horizonte`), de modo que esa condicion nunca se cumplia y el texto
+    # "escenario de alta incertidumbre" nunca llegaba a publicarse por esta via.
     for item in info.get("tabla_horizontes", []):
         if item.get("no_recomendable"):
             lineas.append(
                 f"h={item.get('horizonte')} no recomendable: {item.get('razon_decision', item.get('motivo', ''))}"
-            )
-        elif item.get("permitido_como_escenario") and not item.get("permitido_para_proyeccion_tecnica"):
-            lineas.append(
-                f"h={item.get('horizonte')} se muestra solo como escenario de alta incertidumbre, no como proyección técnica principal."
             )
     return [linea for linea in lineas if str(linea).strip()]
 
@@ -1356,19 +1366,24 @@ def _lineas_cobertura_empirica(resultado: dict[str, Any]) -> list[str]:
     )
     salvaguarda = resultado.get("salvaguarda_benchmark") or {}
     if salvaguarda.get("intentada"):
-        if salvaguarda.get("activada"):
-            lineas.append(
-                f"Salvaguarda con benchmarks: el modelo principal "
-                f"({salvaguarda.get('modelo_principal')}) no supero los criterios en algun horizonte "
-                f"({salvaguarda.get('razon_fallo_principal')}); se aplico "
-                f"{salvaguarda.get('modelo_final')} a toda la trayectoria y el horizonte admisible "
-                f"paso de {salvaguarda.get('h_max_antes')} a {salvaguarda.get('h_max_despues')} meses."
+        # H-2A, 18-08-2026 (reauditoria dirigida V-CODEX-R2 residual). Las dos
+        # ramas que aqui existian describian una sustitucion ("se aplico X a
+        # toda la trayectoria...") y afirmaban sin comprobarlo que "los
+        # benchmarks tampoco los cumplieron". `activada` nunca es True en el
+        # codigo vigente -la salvaguarda es diagnostica desde el 08-08-2026,
+        # nunca sustituye el modelo ni cambia el horizonte admisible- y la
+        # rama alcanzable ignoraba `benchmark_habria_ampliado`.
+        habria_ampliado = bool(salvaguarda.get("benchmark_habria_ampliado"))
+        lineas.append(
+            f"Salvaguarda con benchmarks (diagnóstico, no sustitución): el modelo principal "
+            f"({salvaguarda.get('modelo_principal')}) no fue recomendable en algún horizonte "
+            f"({salvaguarda.get('razon_fallo_principal')}). " + (
+                "Al menos un benchmark alcanzaría un horizonte mayor, pero el modelo publicado sigue "
+                "siendo el de la selección por RMSE fuera de muestra."
+                if habria_ampliado
+                else "Ningún benchmark alcanzaría un horizonte mayor que el modelo principal."
             )
-        else:
-            lineas.append(
-                "Salvaguarda con benchmarks: el modelo principal no supero los criterios y los "
-                "benchmarks Drift y Naive tampoco los cumplieron; el bloqueo se mantiene."
-            )
+        )
         for item in salvaguarda.get("benchmarks_evaluados", []):
             lineas.append(
                 f"Benchmark evaluado {item.get('nombre')}: "

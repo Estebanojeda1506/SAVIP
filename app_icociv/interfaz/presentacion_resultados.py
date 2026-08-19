@@ -162,7 +162,14 @@ def construir_html_explicacion_tarjeta(
         filas = [
             ("Modelo final aplicado", solicitado.get("modelo_aplicado") or proyeccion.get("model_name"), ""),
             ("Modelos evaluados", modelos or NO_EVALUADO, ""),
-            ("Criterios usados", "Backtesting walk-forward, RMSE, MAE, MAPE, sMAPE, MASE, estabilidad, sesgo, intervalos y parsimonia.", ""),
+            # H-1/H-7, 18-08-2026 (reauditoria dirigida V-CODEX-R2 residual).
+            # Decia "...MASE, estabilidad, sesgo, intervalos y parsimonia",
+            # presentando el intervalo (retirado, P0-C) y otras metricas como
+            # criterios de seleccion. El unico criterio de seleccion vigente
+            # es el RMSE fuera de muestra global sobre la muestra comun; el
+            # resto se publica como informacion complementaria.
+            ("Criterio de selección", "RMSE fuera de muestra global sobre la muestra común a todos los candidatos.", ""),
+            ("Métricas complementarias (no deciden)", "MAE, MAPE, sMAPE, MASE, estabilidad, sesgo.", ""),
             ("RMSE", formatear_valor(metricas.get("rmse")), ""),
             ("MAE", formatear_valor(metricas.get("mae")), ""),
             ("MAPE", formatear_porcentaje(metricas.get("mape")), ""),
@@ -260,9 +267,14 @@ def construir_html_explicacion_tarjeta(
 
 
 def _interpretacion_estado(estado: Any) -> str:
+    # H-1/H-4, 18-08-2026 (reauditoria dirigida V-CODEX-R2 residual). El texto
+    # de "proyeccion_tecnica" citaba "sus intervalos" como algo que la
+    # proyeccion conserva; esta version no publica intervalo de prediccion
+    # (P0-C). La clave "escenario" es ademas inalcanzable: el estado que
+    # entrega `_estructurar_resultado_horizontes` solo toma
+    # "proyeccion_tecnica" o "no_admisible" desde el 08-08-2026.
     return {
-        "proyeccion_tecnica": "Puede usarse como proyección técnica, conservando sus intervalos y advertencias.",
-        "escenario": "Solo debe leerse como escenario de alta incertidumbre, no como proyección principal.",
+        "proyeccion_tecnica": "Puede usarse como proyección técnica, conservando sus advertencias y su evidencia fuera de muestra.",
         "no_admisible": "La evidencia disponible no respalda generar la proyección solicitada.",
     }.get(str(estado), NO_EVALUADO)
 
@@ -1120,38 +1132,6 @@ def _fuente_errores_intervalo(valor: Any) -> str:
     return NO_DISPONIBLE
 
 
-def _estado_global(proyeccion: dict[str, Any], generado: bool) -> str:
-    if not generado:
-        return "No recomendable"
-    factibilidad = proyeccion.get("factibilidad") or {}
-    horizonte = proyeccion.get("horizonte_info") or {}
-    textos = " ".join(
-        valor_o_no_disponible(valor).lower()
-        for valor in (
-            factibilidad.get("estado"),
-            horizonte.get("tipo_uso_recomendado"),
-            horizonte.get("accion"),
-        )
-        if valor_o_no_disponible(valor) != NO_DISPONIBLE
-    )
-    if "no recomendable" in textos or "no proyectable" in textos or "bloquear" in textos:
-        return "No recomendable"
-    if "escenario" in textos or "alta incertidumbre" in textos:
-        return "Escenario de alta incertidumbre"
-    if "extendida" in textos:
-        return "Proyección extendida con cautela"
-    if "cautela" in textos or "restringir" in textos:
-        return "Proyección con cautela"
-    confianza = str(factibilidad.get("nivel_confianza_metodologica") or "").lower()
-    if "alta" in confianza or "alto" in confianza:
-        return "Alta confiabilidad relativa"
-    if any(nivel in confianza for nivel in ("media", "medio", "moderada", "moderado", "baja", "bajo")):
-        return "Proyección con cautela"
-    if textos:
-        return "Alta confiabilidad relativa"
-    return NO_DISPONIBLE
-
-
 def _ultima_fila(df: Any) -> dict[str, Any]:
     if isinstance(df, pd.DataFrame) and not df.empty:
         return dict(df.iloc[-1])
@@ -1307,9 +1287,14 @@ def _analisis_horizontes(proyeccion: dict[str, Any]) -> dict[str, Any]:
 
 
 def _estado_solicitado_visible(valor: Any) -> str:
+    # H-4 residual, 18-08-2026 (reauditoria dirigida V-CODEX-R2 residual). Se
+    # retira la entrada "escenario": `_estructurar_resultado_horizontes` solo
+    # fija `estado` en "proyeccion_tecnica" o "no_admisible" desde que se
+    # elimino la rama equivalente (ver su comentario H-4 residual);
+    # mantenerla aqui presentaba un estado inalcanzable como si fuera una
+    # salida posible.
     return {
         "proyeccion_tecnica": "Proyección técnica",
-        "escenario": "Escenario de alta incertidumbre",
         "no_admisible": "No admisible",
     }.get(str(valor), valor_o_no_disponible(valor))
 

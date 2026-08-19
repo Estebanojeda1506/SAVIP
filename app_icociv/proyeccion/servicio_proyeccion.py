@@ -894,11 +894,26 @@ def _ejecutar_proyeccion_base(
             metadatos_auditoria=metadatos_auditoria,
         )
         horizonte_info_np["salvaguarda_benchmark"] = salvaguarda_benchmark
-        if salvaguarda_benchmark.get("intentada") and not salvaguarda_benchmark.get("activada"):
-            razon_bench = (
-                "Salvaguarda conservadora aplicada: los benchmarks Drift y Naive tampoco "
-                "cumplieron los criterios mínimos, por lo que el bloqueo se mantiene."
-            )
+        if salvaguarda_benchmark.get("intentada"):
+            # H-2B, 18-08-2026 (reauditoria dirigida V-CODEX-R2 residual). Esta
+            # razon afirmaba sin comprobarlo "los benchmarks Drift y Naive
+            # tampoco cumplieron los criterios minimos": no leia
+            # `benchmark_habria_ampliado`, de modo que el texto podia
+            # contradecir la propia tabla de benchmarks evaluados. La
+            # salvaguarda es diagnostica (no sustituye), de ahi que el
+            # bloqueo del horizonte se mantenga incluso si un benchmark
+            # habria alcanzado mas alcance.
+            if salvaguarda_benchmark.get("benchmark_habria_ampliado"):
+                razon_bench = (
+                    "Al menos un benchmark evaluado como referencia diagnóstica alcanzaría un "
+                    "horizonte mayor, pero eso no sustituye al modelo principal: el bloqueo de este "
+                    "horizonte se mantiene según la evidencia propia del modelo seleccionado."
+                )
+            else:
+                razon_bench = (
+                    "Los benchmarks Drift y Naive, evaluados como referencia diagnóstica, tampoco "
+                    "alcanzarían un horizonte mayor que el modelo principal."
+                )
             factibilidad_np.setdefault("razones_tecnicas", []).append(razon_bench)
         return _resultado_sin_proyeccion(
             periodo_solicitado=periodo_solicitado,
@@ -1361,15 +1376,19 @@ def _estructurar_resultado_horizontes(resultado: dict[str, Any], origen_horizont
     else:
         resultado.setdefault("degradacion_por_cobertura", {"aplicada": False})
 
-    escenario = (
-        bool(evaluacion_solicitada.get("permitido_como_escenario")) or degrada
-    ) and not tecnico
+    # H-4 residual, 18-08-2026 (reauditoria dirigida V-CODEX-R2 residual).
+    # Se retira la rama `estado == "escenario"`: con `degrada_a_escenario`
+    # fijo en False en todo `clasificar_intervalo_por_cobertura` (P0-F) y
+    # `permitido_como_escenario == permitido_para_proyeccion_tecnica` siempre
+    # (mismo invariante que ya elimino la rama equivalente en
+    # `_estado_global` y en el resumen por horizonte), la condicion
+    # `escenario = (permitido_como_escenario or degrada) and not tecnico` es
+    # `tecnico and not tecnico`: nunca True. El estado y la advertencia de
+    # "escenario estadistico de alta incertidumbre" que dependian de ella no
+    # llegaban a publicarse por esta via.
     if generado and tecnico:
         estado = "proyeccion_tecnica"
         accion = "permitir"
-    elif generado and escenario:
-        estado = "escenario"
-        accion = "permitir como escenario"
     else:
         estado = "no_admisible"
         accion = "negar"
@@ -1569,10 +1588,6 @@ def _estructurar_resultado_horizontes(resultado: dict[str, Any], origen_horizont
         "razon_principal": str(razon_principal),
         "razones_tecnicas": razones,
     }
-    if escenario:
-        resultado_solicitado["advertencia"] = (
-            "Este resultado se presenta únicamente como escenario estadístico de alta incertidumbre."
-        )
 
     analisis = {
         **info,
@@ -3289,11 +3304,18 @@ def determinar_horizonte_maximo_estadistico(
     razones: list[str] = []
     advertencias: list[str] = []
     advertencias_por_horizonte: list[str] = []
+    # H-4 residual, 18-08-2026 (reauditoria dirigida V-CODEX-R2 residual). Se
+    # retiran las dos ramas `elif ... permitido_como_escenario`: con
+    # `permitido_como_escenario == permitido_para_proyeccion_tecnica` siempre
+    # (mismo invariante verificado en `_estructurar_resultado_horizontes` y de
+    # forma empirica sobre 1980 evaluaciones de horizonte), la condicion
+    # "permitido_como_escenario and not permitido_para_proyeccion_tecnica" es
+    # `tecnico and not tecnico`: nunca True. El texto "permitido solo como
+    # escenario de alta incertidumbre" y la accion "permitir como escenario"
+    # nunca llegaban a publicarse por esta via.
     for item in estado_por_horizonte:
         if item.get("permitido_para_proyeccion_tecnica"):
             advertencias.append(f"h={item.get('horizonte')} permitido como {item.get('tipo_uso')}.")
-        elif item.get("permitido_como_escenario"):
-            advertencias.append(f"h={item.get('horizonte')} permitido solo como escenario de alta incertidumbre.")
         elif item.get("mensaje"):
             advertencias_por_horizonte.append(str(item["mensaje"]))
     item_global = _item_horizonte_global(estado_por_horizonte, horizonte_solicitado, max_recomendado, max_admisible)
@@ -3303,9 +3325,6 @@ def determinar_horizonte_maximo_estadistico(
     elif horizonte_solicitado and horizonte_solicitado > max_admisible:
         accion = "restringir"
         uso = f"Usar hasta {max_admisible} meses con evidencia disponible."
-    elif item_global and item_global.get("permitido_como_escenario") and not item_global.get("permitido_para_proyeccion_tecnica"):
-        accion = "permitir como escenario"
-        uso = "Escenario de alta incertidumbre."
     elif item_global and int(item_global.get("horizonte", 0) or 0) >= 7:
         accion = "permitir con cautela"
         uso = item_global.get("tipo_uso") or "Proyección extendida con cautela."
@@ -3465,8 +3484,6 @@ def _serializar_evaluaciones_horizonte(evaluaciones: list[dict[str, Any]]) -> li
         no_recomendable = bool(item.get("no_recomendable", not permitido))
         if no_recomendable:
             motivo = mensaje or "evidencia insuficiente por horizonte"
-        elif permitido_escenario and not permitido_tecnico:
-            motivo = mensaje or "permitido solo como escenario, con evidencia limitada"
         else:
             # H-1A, 18-08-2026 (auditoria final V-CODEX-R2). Fallback solo para
             # datos sin `mensaje_horizonte` propio; ya no cita el intervalo

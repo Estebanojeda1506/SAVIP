@@ -130,7 +130,11 @@ El procedimiento implementado separa la solicitud del usuario, la evaluación es
 
     \item \textbf{Evaluación mensual continua de horizontes.} La auditoría recorre \(h=1,2,3,\ldots,H\). Los botones de la interfaz son atajos de solicitud; no sustituyen la grilla mensual ni fijan el máximo recomendado.
 
-    \item \textbf{Clasificación de cada horizonte.} Cada \(h\) puede quedar como proyección técnica admisible, escenario de alta incertidumbre, no recomendable o no evaluado por falta de evidencia. El último evaluado no se convierte automáticamente en recomendado.
+    % H-4 residual, 18-08-2026 (reauditoria dirigida V-CODEX-R2 residual). El
+    % estado intermedio "escenario de alta incertidumbre" se retiro: el
+    % productor solo entrega proyeccion tecnica (con o sin advertencias) o no
+    % recomendable/no evaluado.
+    \item \textbf{Clasificación de cada horizonte.} Cada \(h\) puede quedar como proyección técnica (con o sin advertencias registradas), no recomendable o no evaluado por falta de evidencia. El último evaluado no se convierte automáticamente en recomendado.
 
     \item \textbf{Separación entre resultado solicitado y análisis completo.} El resultado principal responde exactamente al horizonte pedido. Las tablas auxiliares conservan toda la evaluación mensual, incluidos horizontes distintos del solicitado.
 
@@ -775,7 +779,11 @@ La aplicacion distingue los siguientes conceptos operativos:
 \begin{itemize}[leftmargin=*]
     \item \textbf{Horizonte solicitado}: meses pedidos por el usuario; es una solicitud de análisis.
     \item \textbf{Horizonte máximo recomendado}: último horizonte numéricamente consecutivo desde \(h=1\) clasificado como proyección técnica admisible.
-    \item \textbf{Horizonte máximo permitido como escenario}: último horizonte consecutivo clasificado explícitamente como escenario de alta incertidumbre antes de un corte.
+    % H-4 residual, 18-08-2026 (reauditoria dirigida V-CODEX-R2 residual). La
+    % clasificacion "escenario de alta incertidumbre" se retiro; el campo
+    % permitido_como_escenario coincide siempre con permitido_para_proyeccion_
+    % tecnica, de modo que este maximo no distingue ya un tercer estado.
+    \item \textbf{Horizonte máximo admisible}: último horizonte permitido con evidencia propia, sin exigir que la secuencia de horizontes permitidos sea consecutiva desde \(h=1\).
     \item \textbf{Horizonte máximo evaluado}: último \(h\) para el cual fue posible ejecutar la evaluación; no equivale automáticamente a una recomendación.
     \item \textbf{Límite operativo}: máximo configurado para evitar una búsqueda indefinida; tampoco equivale a una recomendación.
     \item \textbf{Primer horizonte no viable}: primer \(h\) evaluado y clasificado como no admisible.
@@ -866,7 +874,10 @@ Esta separación evita mostrar un resultado de otro horizonte como si respondier
     \item \textbf{Ensamble seleccionado}: se informa que ningun modelo domina claramente, se listan componentes, pesos y razones de inclusion.
     \item \textbf{\(h=12\) viable y \(h=18\) no recomendable}: el resumen global debe depender del horizonte solicitado. Una advertencia de \(h=18\) no debe aparecer como bloqueo global de \(h=12\).
     \item \textbf{MASE mayor que 1}: se reporta como advertencia auxiliar y se contrasta con rRMSE y rMAE frente a naive y drift.
-    \item \textbf{IC95 relativo alto}: reduce la recomendacion del horizonte y puede clasificarlo como escenario de alta incertidumbre.
+    % H-4 residual, 18-08-2026 (reauditoria dirigida V-CODEX-R2 residual). El
+    % ancho relativo del IC95 no clasifica ni degrada un horizonte: se calcula
+    % como diagnostico y se advierte cuando es alto, sin vetar la proyeccion.
+    \item \textbf{IC95 relativo alto}: se calcula y se publica como advertencia diagnóstica; no reduce la recomendación del horizonte ni lo clasifica en un estado distinto.
 \end{itemize}
 
 La app debe evitar contradicciones. Si se permite una proyeccion a 12 meses, el informe no debe decir en el resumen que no se permite proyeccion. Si un horizonte especifico no se recomienda, debe mencionarse el horizonte exacto. Si la solicitud no es admisible, no se reutiliza silenciosamente una proyección más corta.
@@ -900,11 +911,16 @@ La defensa metodológica del sistema se fundamenta en trazabilidad, validación 
 
 La validación walk-forward se adopta porque respeta el orden pasado-futuro de las series temporales. Cada pronóstico se construye con información disponible hasta el origen de predicción y se compara con un valor futuro no usado en el entrenamiento. Este diseño reduce la fuga de información y aproxima el uso operativo de la aplicación \citep{tashman2000,hyndman2021fpp3}.
 
-Los valores predeterminados de la interfaz son atajos de solicitud, no límites estadísticos. El máximo recomendado depende de la clasificación técnica consecutiva sustentada en errores por horizonte, intervalos, sesgo, estabilidad, comparación contra benchmarks y cantidad de ventanas válidas. El máximo evaluado y el límite operativo se reportan por separado. Esta regla pertenece a la política interna documentada en la Tabla \ref{tab:matriz_criterios_metodologicos}.
+% H-1/H-4 residual, 18-08-2026 (reauditoria dirigida V-CODEX-R2 residual). El
+% parrafo citaba intervalos, sesgo, estabilidad, benchmarks y ventanas como
+% fundamento del maximo recomendado -retirado como criterio de decision, P0-C
+% y P0-B/P0-G-, y el ultimo parrafo describia bandas que esta version no
+% publica (P0-C) reclasificando el horizonte a un estado retirado.
+Los valores predeterminados de la interfaz son atajos de solicitud, no límites estadísticos. El máximo recomendado depende del backtesting walk-forward y de la evidencia fuera de muestra disponible por horizonte; errores por horizonte, sesgo, estabilidad y comparación contra benchmarks se publican como información complementaria, sin decidir el máximo. El máximo evaluado y el límite operativo se reportan por separado. Esta regla pertenece a la política interna documentada en la Tabla \ref{tab:matriz_criterios_metodologicos}.
 
 Los modelos simples tienen un papel central porque funcionan como benchmarks y porque, en series moderadas, pueden ofrecer mayor estabilidad y trazabilidad. Un modelo avanzado solo queda justificado si aporta mejora fuera de muestra frente a Naive, Drift y Holt. La complejidad se acepta cuando mejora la evidencia predictiva; no se adopta como fin en sí mismo.
 
-Los intervalos amplios se reportan porque representan incertidumbre estadística. Reducir artificialmente las bandas produciría una falsa sensación de precisión. Cuando el IC95 relativo crece, la aplicación debe comunicar que el horizonte pierde fiabilidad o pasa a interpretarse como escenario de alta incertidumbre \citep{hyndman2021fpp3}.
+Esta versión no publica intervalo de predicción: su método no está sustentado de forma completa, de modo que ni sus límites ni su cobertura forman parte de la salida. El ancho relativo del IC95 se sigue calculando como diagnóstico interno y se comunica como advertencia cuando es alto, pero no reclasifica el horizonte ni lo degrada \citep{hyndman2021fpp3}.
 
 \section{Conclusiones}
 

@@ -504,7 +504,18 @@ def _evaluacion_horizonte_ui(
     }
 
 
-def test_horizonte_dinamico_diferencia_tecnico_escenario_y_no_evaluado() -> None:
+def test_horizonte_dinamico_diferencia_tecnico_cautela_y_no_evaluado() -> None:
+    """H-4 residual, 18-08-2026 (reauditoria dirigida V-CODEX-R2 residual).
+    Renombrada y reescrita: el nombre y la ultima asercion original
+    describian una tercera salida "permitir como escenario" que el
+    evaluador real nunca produce (`permitido_como_escenario ==
+    permitido_para_proyeccion_tecnica` siempre) y que se retiro tambien de
+    `determinar_horizonte_maximo_estadistico`. Con datos sinteticos que
+    fuerzan `permitido_como_escenario=True, permitido_para_proyeccion_
+    tecnica=False` -combinacion que ya no ocurre con datos reales, pero que
+    esta funcion sigue aceptando como entrada-, la accion resultante es
+    ahora "permitir con cautela": una etiqueta generica y honesta, no la
+    etiqueta de estado retirada."""
     from app_icociv.proyeccion.servicio_proyeccion import determinar_horizonte_maximo_estadistico
 
     evaluaciones = [
@@ -520,7 +531,7 @@ def test_horizonte_dinamico_diferencia_tecnico_escenario_y_no_evaluado() -> None
     assert info["horizonte_maximo_recomendado"] == 12
     assert info["horizonte_maximo_permitido_como_escenario"] == 18
     assert info["horizonte_finalmente_permitido"] == 18
-    assert info["accion"] == "permitir como escenario"
+    assert info["accion"] == "permitir con cautela"
     assert info["primer_horizonte_no_viable"] == 0
 
     sin_h18 = determinar_horizonte_maximo_estadistico(

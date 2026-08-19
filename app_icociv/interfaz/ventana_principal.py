@@ -1184,18 +1184,15 @@ class VentanaPrincipal(QMainWindow):
             self.lbl_dashboard_estado.setText("Horizonte no admisible · proyección no generada")
             return
 
+        # H-4, 18-08-2026 (reauditoria dirigida V-CODEX-R2 residual). Ambas
+        # etiquetas comparaban `solicitado["estado"]` contra el literal
+        # "escenario", que `_estructurar_resultado_horizontes` no produce
+        # desde el 08-08-2026 (solo entrega "proyeccion_tecnica" o
+        # "no_admisible"): la rama nunca se ejecutaba.
         horizonte_info = proyeccion.get("horizonte_info", {})
         self.lbl_horizonte_recomendado.setText(f"Horizonte estadístico: {horizonte_info.get('mensaje', '')}")
-        self.etiqueta_estado.setText(
-            "Escenario de alta incertidumbre generado."
-            if solicitado.get("estado") == "escenario"
-            else "Proyección ejecutada correctamente."
-        )
-        self.lbl_dashboard_estado.setText(
-            "Escenario de alta incertidumbre"
-            if solicitado.get("estado") == "escenario"
-            else "Análisis actualizado correctamente"
-        )
+        self.etiqueta_estado.setText("Proyección ejecutada correctamente.")
+        self.lbl_dashboard_estado.setText("Análisis actualizado correctamente")
 
     def _ejecutar_proyeccion_para_empalme(self, seleccion: dict[str, Any], anio: int, mes: int) -> dict[str, Any]:
         self.spin_anio.setValue(int(anio))

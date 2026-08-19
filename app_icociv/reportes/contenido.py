@@ -50,17 +50,22 @@ from app_icociv.utilidades.nomenclatura_icociv import nombre_tabla_icociv
 from app_icociv.utilidades.utilidades import version_statsmodels
 
 
+# H-4 residual, 18-08-2026 (reauditoria dirigida V-CODEX-R2 residual). Se
+# retiran las entradas "escenario" y "extendida_cautela"/
+# "escenario_alta_incertidumbre" de estos dos diccionarios:
+# `_estructurar_resultado_horizontes` solo fija `estado` en
+# "proyeccion_tecnica" o "no_admisible", y `_clasificar_evidencia_horizonte`
+# solo fija `clasificacion` en "tecnica_alta", "tecnica_cautela", "no_viable"
+# o "no_evaluado" (ver sus comentarios H-4 residual). Mantener las entradas
+# retiradas presentaba estados inalcanzables como si fueran salidas posibles.
 ESTADOS_VISIBLES = {
     "proyeccion_tecnica": "Proyección técnica",
-    "escenario": "Escenario de alta incertidumbre",
     "no_admisible": "No admisible",
 }
 
 CLASIFICACIONES_VISIBLES = {
     "tecnica_alta": "Proyección técnica",
     "tecnica_cautela": "Proyección técnica con cautela",
-    "extendida_cautela": "Proyección extendida con cautela",
-    "escenario_alta_incertidumbre": "Escenario de alta incertidumbre",
     "no_viable": "No recomendable",
     "no_evaluado": "No evaluado",
 }
@@ -248,14 +253,22 @@ def resumen_ejecutivo(datos: DatosProyeccion) -> list[str]:
             "puntual y no viene acompañado de una banda de incertidumbre defendible."
         )
 
+    # H-4B, 18-08-2026 (reauditoria dirigida V-CODEX-R2 residual). Las tres
+    # ramas citaban "escenario [de alta incertidumbre]" como si fuera un
+    # estado que el productor real puede entregar. Los unicos estados que
+    # _estructurar_resultado_horizontes puede fijar son "proyeccion_tecnica" y
+    # "no_admisible" desde el 08-08-2026; el estado intermedio nunca se
+    # produce. Reescrito sin el rotulo, conservando el hecho real: los meses
+    # posteriores al maximo recomendado tienen menos evidencia fuera de
+    # muestra y su incertidumbre no viene acotada.
     if es_numero(maximo) and es_numero(horizonte):
         maximo_int, horizonte_int = int(maximo), int(horizonte)
         if maximo_int and horizonte_int > maximo_int:
             parrafos.append(
                 f"SAVIP recomienda utilizar la proyección hasta {formato_entero(maximo_int)} meses como referencia "
-                f"técnica. Los {formato_entero(horizonte_int - maximo_int)} meses posteriores se presentan como "
-                "escenario de alta incertidumbre, y esa incertidumbre no viene acotada: esta versión no "
-                "publica intervalo de predicción."
+                f"técnica. Los {formato_entero(horizonte_int - maximo_int)} meses posteriores cuentan con menos "
+                "evidencia fuera de muestra y deben leerse con mayor cautela; esa incertidumbre no viene "
+                "acotada porque esta versión no publica intervalo de predicción."
             )
         elif maximo_int:
             parrafos.append(
@@ -266,7 +279,7 @@ def resumen_ejecutivo(datos: DatosProyeccion) -> list[str]:
         else:
             parrafos.append(
                 "La evidencia disponible no permitió identificar un horizonte máximo recomendado; "
-                "la trayectoria completa debe leerse como escenario."
+                "la trayectoria completa debe leerse con cautela."
             )
 
     advertencias = _advertencias(resultado, maximo=3)

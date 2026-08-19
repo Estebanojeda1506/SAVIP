@@ -114,6 +114,18 @@ def test_manual_admisible_identifica_origen_y_h7() -> None:
 
 
 def test_horizonte_solo_escenario_no_se_llama_proyeccion_tecnica() -> None:
+    """H-4 residual, 18-08-2026 (reauditoria dirigida V-CODEX-R2 residual).
+    El estado intermedio "escenario" se retiro de
+    `_estructurar_resultado_horizontes`: con el evaluador real,
+    `permitido_como_escenario == permitido_para_proyeccion_tecnica` siempre
+    (ver su comentario H-4 residual), de modo que esa rama nunca se
+    ejecutaba. Este test sigue forzando con datos sinteticos la combinacion
+    permitido_como_escenario=True / permitido_para_proyeccion_tecnica=False
+    -que no ocurre con datos reales, pero que la funcion todavia acepta como
+    entrada- para verificar la garantia que le da nombre al test: un
+    horizonte que no es tecnico nunca se etiqueta como "proyeccion_tecnica".
+    Hoy esa garantia se cumple devolviendo "no_admisible" en lugar del
+    estado retirado."""
     for solicitado, origen in ((18, "predeterminado"), (15, "manual")):
         principal = _resultado(
             solicitado,
@@ -123,9 +135,10 @@ def test_horizonte_solo_escenario_no_se_llama_proyeccion_tecnica() -> None:
             generado=True,
             origen=origen,
         )["resultado_horizonte_solicitado"]
-        assert principal["estado"] == "escenario"
-        assert principal["accion"] == "permitir como escenario"
-        assert "alta incertidumbre" in principal["advertencia"]
+        assert principal["estado"] != "proyeccion_tecnica"
+        assert principal["estado"] == "no_admisible"
+        assert principal["accion"] == "negar"
+        assert "advertencia" not in principal
 
 
 def test_h32_no_admisible_no_expone_proyeccion_y_marca_no_evaluados() -> None:
