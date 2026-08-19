@@ -19,6 +19,12 @@ H-4   Ninguna superficie (generador_reportes.py, contenido.py,
 H-6   El parrafo de main.tex ya no referencia `tab:matriz_conceptual` como
       fuente de la escalera de uso comunicado, y ninguna tabla del documento
       tiene un `\\toprule` pegado a su `\\caption`/`\\label` sin `\\vspace`.
+N-1   Correccion unica final N-1, 18-08-2026 (reauditoria V-CODEX-R2). El
+      mensaje de restriccion de horizonte en `_ejecutar_proyeccion_base`
+      atribuia la causa a "el maximo permitido como escenario", un campo
+      siempre 0/no identificado; el horizonte y el numero citados venian en
+      realidad de `horizonte_maximo_admisible`. Se verifica con una serie
+      sintetica (sin anexo DANE) que alcanza realmente la restriccion.
 """
 from __future__ import annotations
 
@@ -37,6 +43,7 @@ from app_icociv.reportes.generador_reportes import (
     _lineas_determinacion_horizonte,
 )
 from app_icociv.reportes.contenido import DatosProyeccion, resumen_ejecutivo
+from app_icociv.proyeccion.servicio_proyeccion import ejecutar_proyeccion
 
 MAIN_TEX = ROOT / "documentacion_latex" / "documento_tecnico_icociv_iccp" / "main.tex"
 
@@ -235,6 +242,42 @@ def test_h6a_ninguna_tabla_tiene_toprule_pegado_al_caption_sin_espaciado():
         if not any(marca in antes_de_toprule for marca in marcas_validas):
             fallos.append(i + 1)
     assert not fallos, f"caption(s) sin espaciado explicito antes de \\toprule en las lineas: {fallos}"
+
+
+# ------------------------------------------------------------------ N-1 -----
+def test_n1_restriccion_de_horizonte_cita_el_maximo_admisible_real():
+    """N-1, 18-08-2026 (correccion unica final N-1, reauditoria V-CODEX-R2).
+
+    Serie sintetica (sin anexo DANE): tendencia lineal de 24 observaciones
+    mensuales, 2020-01 a 2021-12. Con N0=6 y sin ningun horizonte no viable,
+    el maximo admisible queda en h=18 (cota de existencia n-N0=18). Se
+    solicita h=24, que la excede, alcanzando de verdad la rama de
+    restriccion cuyo mensaje corrige N-1.
+    """
+    n = 24
+    periodos = [f"{2020 + i // 12}_{i % 12 + 1}" for i in range(n)]
+    valores = [100.0 + 0.5 * i for i in range(n)]
+    serie = pd.DataFrame({"Periodo": periodos, "Indice": valores})
+
+    resultado = ejecutar_proyeccion(serie, 2023, 12, 2020)
+
+    assert resultado.get("horizonte_solicitado") == 24, resultado.get("horizonte_solicitado")
+    assert resultado.get("proyeccion_generada") is False
+    info = resultado.get("analisis_horizontes_completo") or {}
+    assert info.get("horizonte_maximo_admisible") == 18, info.get("horizonte_maximo_admisible")
+
+    explicacion = str(resultado.get("explicacion") or "")
+    assert explicacion.strip(), "la restriccion no alcanzo el mensaje de explicacion"
+
+    baja = explicacion.lower()
+    assert "máximo admisible" in baja or "maximo admisible" in baja, explicacion
+    assert "h=18" in baja or "(18" in baja or "18 meses" in baja, explicacion
+    assert "evidencia fuera de muestra" in baja, explicacion
+
+    assert "permitido como escenario" not in baja, explicacion
+    assert "escenario de alta incertidumbre" not in baja, explicacion
+    assert "máximo como escenario" not in baja and "maximo como escenario" not in baja, explicacion
+    assert "intervalo" not in baja, explicacion
 
 
 def _principal() -> int:

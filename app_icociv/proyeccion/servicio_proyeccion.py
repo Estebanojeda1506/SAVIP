@@ -1001,9 +1001,16 @@ def _ejecutar_proyeccion_base(
             explicacion=factibilidad_bloqueada["explicacion"],
         )
     if horizonte_reconciliado != horizonte_solicitado:
+        # N-1, 18-08-2026 (correccion unica final N-1, reauditoria V-CODEX-R2).
+        # "el maximo permitido como escenario" atribuia la causa al campo
+        # horizonte_maximo_permitido_como_escenario (siempre 0/no identificado,
+        # ver comentario H-4 en determinar_horizonte_maximo_estadistico).
+        # `horizonte_reconciliado` viene de `horizonte_finalmente_permitido`,
+        # que en esta rama vale `max_admisible` (_mayor_horizonte_permitido):
+        # el horizonte y el numero eran correctos, la causa atribuida no.
         explicacion_restriccion = (
             f"La proyección para h={horizonte_solicitado} no fue generada porque supera el máximo "
-            f"permitido como escenario (h={horizonte_reconciliado})."
+            f"admisible con la evidencia fuera de muestra disponible (h={horizonte_reconciliado})."
         )
         factibilidad_restringida = dict(factibilidad)
         factibilidad_restringida.update(
