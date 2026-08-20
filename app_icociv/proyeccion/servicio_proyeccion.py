@@ -393,6 +393,13 @@ def construir_serie(fila: pd.DataFrame, year_month: list[str]) -> pd.DataFrame:
 # ==============================
 
 MENSAJE_HORIZONTE_INVALIDO = "El horizonte solicitado debe ser un número entero positivo de meses."
+#: post-r1-metodologia-12-24, 19-08-2026 (Prompt 13). Mensaje especifico para
+#: h>H_OPERATIVO_MAX: no es un problema de "entero positivo" -25 SI es un
+#: entero positivo-, es que excede el alcance operativo de SAVIP. Antes ambos
+#: casos compartian MENSAJE_HORIZONTE_INVALIDO, produciendo un mensaje
+#: incorrecto para h>24 (bug reportado en el Prompt 13).
+MENSAJE_HORIZONTE_FUERA_DE_ALCANCE = "El horizonte solicitado debe estar entre 1 y 24 meses."
+EXPLICACION_HORIZONTE_FUERA_DE_ALCANCE = "El alcance máximo de proyección de SAVIP es de 24 meses."
 #: post-r1-metodologia-12-24, 19-08-2026 (Prompt 10). Metodologia final de
 #: proyeccion SAVIP, validada en los Prompts 08/09 sobre MUESTRA_SAVIP_10.
 #:
@@ -482,8 +489,10 @@ def validar_horizonte_solicitado(valor: Any, maximo: int = HORIZONTE_MAXIMO_OPER
         numero = float(valor)
     except (TypeError, ValueError) as exc:
         raise ValueError(MENSAJE_HORIZONTE_INVALIDO) from exc
-    if not np.isfinite(numero) or numero != int(numero) or numero <= 0 or numero > int(maximo):
+    if not np.isfinite(numero) or numero != int(numero) or numero <= 0:
         raise ValueError(MENSAJE_HORIZONTE_INVALIDO)
+    if numero > int(maximo):
+        raise ValueError(f"{MENSAJE_HORIZONTE_FUERA_DE_ALCANCE} {EXPLICACION_HORIZONTE_FUERA_DE_ALCANCE}")
     return int(numero)
 
 
@@ -1841,10 +1850,18 @@ def _estructurar_resultado_horizontes(resultado: dict[str, Any], origen_horizont
         "razones_tecnicas": razones,
     }
 
+    # post-r1-metodologia-12-24, 19-08-2026 (Prompt 13). Bajo N0=12/H=24 no
+    # hay `info["evaluaciones"]` (esa lista solo existia en la rejilla
+    # triangular retirada), de modo que el `tabla_horizontes` construido aqui
+    # arriba con la logica de esa rejilla siempre da vacio. Sin este resguardo
+    # se pisaba con [] la tabla real de evidencia h=1..24 (RMSE_h/MAE_h/...)
+    # que `_ejecutar_proyeccion_base` ya puso en `info["tabla_horizontes"]`,
+    # dejando sin datos tanto la banda +/-MAE de la grafica como la tabla de
+    # evidencia de los reportes (hallazgo de este prompt).
     analisis = {
         **info,
         "horizonte_solicitado": solicitado,
-        "tabla_horizontes": tabla_horizontes,
+        "tabla_horizontes": tabla_horizontes or info.get("tabla_horizontes") or [],
         "evaluaciones": evaluaciones,
     }
     trazabilidad = dict(analisis.get("trazabilidad") or {})

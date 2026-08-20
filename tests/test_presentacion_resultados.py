@@ -119,35 +119,32 @@ def test_presentacion_resultados_muestra_tarjetas_y_tablas_clave() -> None:
     assert "Resultado del horizonte solicitado" in html
     assert "Índice proyectado" in html
     assert "Período proyectado" in html
-    # P0-C / C2, 15-08-2026: la tabla se llamaba «Rangos de incertidumbre», en
-    # plural y prometiendo rangos. Sin banda publicada no hay rangos que dar; la
-    # seccion sigue existiendo y su cometido es declarar la ausencia y el motivo.
-    assert "Incertidumbre" in html
-    assert "El método del intervalo no está sustentado." in html or \
-        "P0-C" in html or "no está sustentad" in html
-    assert "Resumen del análisis dinámico de horizontes" in html
-    assert "Evaluación completa por horizonte" in html
-    assert "<th>Ver detalle</th>" in html
-    assert "detalle-horizonte:12" in html
-    assert "<th>Razón</th>" not in html
+    # post-r1-metodologia-12-24, 19-08-2026 (Prompt 13). Retirada la seccion
+    # "Incertidumbre" (solo declaraba el intervalo retirado sin ocupar
+    # utilmente el espacio, item 6 del Prompt 13). En su lugar: "Error
+    # histórico de referencia (±MAE)", que muestra el MAE_h del horizonte
+    # solicitado como referencia descriptiva, no como intervalo de confianza.
+    assert "Error histórico de referencia" in html
+    assert "±MAE" in html or "no constituye un intervalo de confianza" in html
+    assert "Resumen de la metodología de proyección" in html or "Resumen del análisis dinámico de horizontes" in html
     assert "Parámetros del modelo seleccionado" in html
     assert "Criterios de selección del modelo" in html
     assert "Modelo aplicado" in html
-    # La banda del 80 % se retiro en 2026 tras medir cobertura 0,77 media.
-    # P0-C RUTA C2, 14-08-2026: se retira tambien la del 95 %, y por el mismo
-    # motivo de fondo, ahora general: ninguno de los trece metodos de intervalo
-    # auditados resulto adoptable, y publicar una banda sin construccion
-    # sustentada contradice REQ 20. La interfaz declara la ausencia en lugar de
-    # dibujarla.
+    # La banda del 80 % y la del 95 % (IC80/IC95) siguen retiradas de toda
+    # salida productiva (P0-C RUTA C2). Ninguna tarjeta ni seccion principal
+    # debe invitar al usuario a buscarlas (Prompt 13, item 6).
     assert "IC80" not in html, "La banda del 80 % no puede volver a la interfaz"
     assert "q80" not in html, "q80 es diagnostico interno: no se expone"
     assert "IC95" not in html, "P0-C C2: el intervalo del 95 % ya no se publica"
-    assert "No se publica en esta versión" in html
-    assert "Horizonte máximo recomendado" in html
-    assert "Horizonte máximo permitido como escenario" in html
-    assert "Máximo horizonte evaluado" in html
-    assert "Límite operativo de auditoría" in html
-    assert "Primer horizonte no viable" in html
+    assert "Intervalo de predicción" not in html, "no debe quedar una tarjeta anunciando el intervalo retirado"
+    # post-r1-metodologia-12-24, 19-08-2026 (Prompt 12/13). Retirada la
+    # semantica triangular (horizonte maximo recomendado/permitido como
+    # escenario/primer horizonte no viable): SAVIP tiene un alcance operativo
+    # fijo de 24 meses, no una clasificacion por horizonte.
+    assert "Horizonte máximo recomendado" not in html
+    assert "Horizonte máximo permitido como escenario" not in html
+    assert "Primer horizonte no viable" not in html
+    assert "Alcance máximo de proyección" in html
     assert "Advertencias principales" in html
     assert "Tabla de proyecciones" in html
     assert "Modelos evaluados" in html
@@ -344,11 +341,15 @@ def test_seis_tarjetas_tienen_explicaciones_especificas_y_sin_valores_crudos() -
     }
     esperados = {
         "indice": "Explicación del índice proyectado",
-        "horizonte": "Diferencia clave",
+        # post-r1-metodologia-12-24, 19-08-2026 (Prompt 12/13). Retirada la
+        # semantica triangular ("Diferencia clave" entre solicitado/
+        # recomendado/evaluado); ahora describe el alcance operativo fijo.
+        "horizonte": "Alcance máximo de proyección de SAVIP",
         "modelo": "Cómo se seleccionó el modelo",
         "estado": "Interpretación",
-        # C2: la tarjeta de intervalo se retiro de la interfaz.
-        "maximo": "Advertencia metodológica",
+        # C2: la tarjeta de intervalo se retiro de la interfaz; "maximo"
+        # explica ahora el alcance operativo y la seleccion por RMSE OOS.
+        "maximo": "RMSE OOS usado en la selección",
     }
     for clave, texto in esperados.items():
         html = construir_html_explicacion_tarjeta(clave, resultado, "oscuro")

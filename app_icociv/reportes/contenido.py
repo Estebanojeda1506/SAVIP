@@ -534,12 +534,17 @@ def _seccion_grafica(datos: DatosProyeccion, config: ConfiguracionInforme) -> Se
         return Seccion("grafica_principal", "Gráfica principal", [])
     solicitado = _solicitado(datos.resultado)
     if solicitado.get("proyeccion_generada"):
+        # post-r1-metodologia-12-24, 19-08-2026 (Prompt 13). La grafica ya no
+        # deja la banda vacia: dibuja una banda DESCRIPTIVA y_hat_h +/- MAE_h
+        # (MAE fuera de muestra por horizonte del modelo seleccionado, mismo
+        # rectangulo que decidio la seleccion). No es un intervalo de
+        # confianza (P0-C sigue retirado); el pie lo aclara explicitamente.
         pie = (
             "La línea continua es el índice publicado; la línea discontinua, la proyección del modelo. "
             "La línea vertical punteada separa lo observado de lo proyectado. "
-            # P0-C / C2: la gráfica ya no dibuja banda; describirla dejaba al
-            # lector buscando un sombreado inexistente.
-            "La gráfica no dibuja banda de incertidumbre: esta versión no publica intervalo de predicción."
+            "La banda sombreada es la Referencia de error histórico (±MAE): representa la magnitud media "
+            "absoluta de los errores observados durante la validación fuera de muestra por horizonte; no "
+            "corresponde a un intervalo de confianza ni de predicción probabilístico."
         )
     else:
         pie = "Serie histórica del índice seleccionado. No se generó proyección para el horizonte solicitado."
@@ -1121,8 +1126,11 @@ def _seccion_horizonte(datos: DatosProyeccion) -> Seccion:
         columnas_numericas=(),
     ))
     if evaluaciones:
+        # Maximo 6 columnas por legibilidad DOCX (convencion del proyecto).
+        # Sesgo_h se conserva en la tarjeta "Error histórico de referencia"
+        # de la interfaz; aqui se prioriza RMSE_h/MAE_h/sMAPE_h/MASE_h/W_h.
         bloques.append(Tabla(
-            encabezados=["h", "W_h", "RMSE_h", "MAE_h", "sMAPE_h", "MASE_h", "Sesgo_h"],
+            encabezados=["h", "W_h", "RMSE_h", "MAE_h", "sMAPE_h", "MASE_h"],
             filas=[[
                 formato_entero(item.get("horizonte")),
                 formato_entero(item.get("W")),
@@ -1130,15 +1138,14 @@ def _seccion_horizonte(datos: DatosProyeccion) -> Seccion:
                 formato_indice(item.get("mae")),
                 formato_porcentaje(item.get("smape")) if es_numero(item.get("smape")) else "No disponible",
                 formato_indice(item.get("mase")) if es_numero(item.get("mase")) else "No disponible",
-                formato_indice(item.get("sesgo")) if es_numero(item.get("sesgo")) else "No disponible",
             ] for item in evaluaciones if isinstance(item, dict)],
             titulo="Evidencia fuera de muestra por horizonte (1–24 meses)",
             nota=(
                 "Métricas descriptivas del modelo seleccionado en cada horizonte; no deciden la selección "
                 "del modelo, que ya se resolvió con el RMSE OOS agregado sobre el dominio 1–24 meses."
             ),
-            columnas_numericas=(0, 1, 2, 3, 4, 5, 6),
-            anchos=(1.2, 1.6, 2.0, 2.0, 2.0, 2.0, 2.0),
+            columnas_numericas=(0, 1, 2, 3, 4, 5),
+            anchos=(1.2, 1.6, 2.2, 2.2, 2.2, 2.2),
         ))
     return Seccion("horizonte", "Metodología y evidencia por horizonte", bloques)
 

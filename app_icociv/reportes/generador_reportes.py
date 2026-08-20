@@ -1071,13 +1071,17 @@ def _lineas_determinacion_horizonte(resultado: dict[str, Any]) -> list[str]:
 
 
 def _lineas_uso_obras_civiles() -> list[str]:
+    # post-r1-metodologia-12-24, 19-08-2026 (Prompt 13). Retirado "en
+    # horizontes largos se debe hablar de escenario estadístico": esa
+    # clasificación por horizonte ya no existe bajo N0=12/H=24 (alcance
+    # operativo fijo de 24 meses, un único modelo por serie).
     return [
         "La proyección corresponde al índice ICOCIV seleccionado por el usuario y no a toda la operación estadística.",
-        "La trayectoria central es un escenario base para análisis técnico de actualización.",
-        # P0-C / C2, 15-08-2026: ninguna banda se reporta ya. La frase anterior
-        # afirmaba lo contrario y anunciaba una cobertura que tampoco se publica.
+        "La trayectoria es la del modelo único seleccionado por menor RMSE fuera de muestra sobre el dominio común de 1 a 24 meses.",
         "Esta versión no publica intervalo de predicción: su método no está sustentado, de modo que ni sus límites ni su cobertura forman parte de la salida.",
-        "En horizontes largos se debe hablar de escenario estadístico, no de valor definitivo.",
+        "Como referencia de la magnitud histórica del error, se reporta el MAE fuera de muestra por horizonte "
+        "(sección «Evaluación completa por horizonte»): representa una desviación media absoluta observada en "
+        "validación, no un intervalo de confianza ni una garantía de que el valor futuro caerá dentro de ese margen.",
         "La incertidumbre del pronóstico no viene acotada; debe considerarse con criterio profesional antes de usar el resultado en obras civiles.",
     ]
 

@@ -106,14 +106,36 @@ def grafica_principal(
                         len(y_obs) + posicion,
                         color=PALETA["aviso"], linewidth=1.0, linestyle="-.", alpha=0.55,
                     )
-        # P0-C RUTA C2: el intervalo se retira de las salidas; el calculo interno se conserva como diagnostico. La grafica de los informes deja de sombrear la banda.
-        if False and con_intervalo and {"limite_inferior_95", "limite_superior_95"}.issubset(proyecciones.columns):
-            inferior = [float(y_obs[-1])] + [float(v) for v in proyecciones["limite_inferior_95"]]
-            superior = [float(y_obs[-1])] + [float(v) for v in proyecciones["limite_superior_95"]]
+        # post-r1-metodologia-12-24, 19-08-2026 (Prompt 13). P0-C RUTA C2: el
+        # intervalo de confianza (IC80/IC95) sigue retirado de las salidas; el
+        # calculo interno se conserva como diagnostico y no se publica.
+        #
+        # Banda DESCRIPTIVA y_hat_h +/- MAE_h con el MAE fuera de muestra por
+        # horizonte del modelo ya seleccionado (mismo rectangulo que decidio
+        # la seleccion). No es un intervalo de confianza ni de prediccion
+        # probabilistico: no decide nada, solo ilustra la magnitud historica
+        # del error. Se omite el punto donde MAE_h no existe o no es finito.
+        horizonte_info_graf = resultado.get("horizonte_info") or {}
+        mae_por_horizonte = {
+            int(item["horizonte"]): item.get("mae")
+            for item in (horizonte_info_graf.get("tabla_horizontes") or [])
+            if item.get("horizonte") is not None
+        }
+        inferior = [float(y_obs[-1])]
+        superior = [float(y_obs[-1])]
+        for paso, valor in enumerate(_trayectoria_con_huecos(proyecciones), start=1):
+            mae_h = mae_por_horizonte.get(paso)
+            if valor is not None and valor == valor and mae_h is not None and mae_h == mae_h:
+                inferior.append(float(valor) - float(mae_h))
+                superior.append(float(valor) + float(mae_h))
+            else:
+                inferior.append(float("nan"))
+                superior.append(float("nan"))
+        if any(v == v for v in inferior[1:]):
             eje.fill_between(
                 x_proy, inferior, superior,
                 color=PALETA["acento"], alpha=0.15, linewidth=0,
-                label="Intervalo de predicción 95 %",
+                label="Referencia de error histórico (±MAE)",
             )
         # Divisoria explícita entre lo observado y lo proyectado (§5.4).
         eje.axvline(len(y_obs) - 1, color=PALETA["borde_fuerte"], linewidth=1.1, linestyle=":")

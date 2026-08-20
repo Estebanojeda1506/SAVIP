@@ -41,7 +41,7 @@ def construir_html_resultados(resultado: dict[str, Any], tema: str = "claro") ->
         _tabla_resultado_principal(proyeccion, fuente_visible, generado),
         _tabla_horizonte_estadistico(proyeccion),
         _tabla_evaluacion_horizontes(proyeccion),
-        _tabla_incertidumbre(proyeccion),
+        _seccion_error_historico(proyeccion),
         _bloque_salvaguarda_benchmark(proyeccion),
         _bloque_ajuste_calendario(proyeccion),
         _tabla_parametros_modelo(proyeccion),
@@ -198,18 +198,27 @@ def construir_html_explicacion_tarjeta(
         # ya no puede tomar (ver comentario H-4 en _interpretacion_estado).
         nota = "El estado resume si el horizonte puede usarse técnicamente o si debe negarse."
         titulo = "Explicación del estado del horizonte"
-    elif clave == "ic95":
-        # P0-C / C2: no se lee la pareja de limites; no se publica.
-        # P0-C RUTA C2: el intervalo se retira de las salidas; el calculo interno se conserva como diagnostico. La seccion no se deja vacia: explica por que no hay intervalo.
+    elif clave == "error_historico":
+        # post-r1-metodologia-12-24, 19-08-2026 (Prompt 13). IC80/IC95
+        # productivos siguen retirados (P0-C); esta tarjeta ya no invita al
+        # usuario a buscar un intervalo que la metodologia no entrega. Muestra
+        # en su lugar el MAE fuera de muestra del horizonte solicitado, una
+        # referencia descriptiva -no un intervalo de confianza ni de
+        # prediccion probabilistico-.
+        horizonte_txt = _fmt_entero(solicitado.get("horizonte_solicitado"))
         filas = [
-            ("Intervalo de predicción", "No se publica en esta versión", ""),
-            ("Errores OOS medidos", _fmt_entero(ultima.get("ventanas_oos_horizonte")), ""),
-            ("Advertencias", ultima.get("advertencia_evidencia_oos") or evaluacion_solicitada.get("advertencias"), ""),
+            (f"MAE histórico (h={horizonte_txt})", formatear_valor(metricas.get("mae")), ""),
+            (f"RMSE histórico (h={horizonte_txt})", formatear_valor(metricas.get("rmse")), ""),
+            (f"sMAPE histórico (h={horizonte_txt})", formatear_porcentaje(metricas.get("smape")), ""),
+            ("Evaluaciones OOS disponibles (W_h)", _fmt_entero(backtesting.get("iteraciones")), ""),
         ]
         nota = (
-            "Esta versión publica el pronóstico puntual y la evidencia histórica de error fuera de muestra. No se publica un intervalo de predicción porque no se ha adoptado una construcción metodológicamente sustentada para las condiciones de SAVIP."
+            "La banda representa la magnitud media absoluta de los errores observados durante la "
+            "validación fuera de muestra para cada horizonte. Sirve como referencia visual de cuánto se "
+            "ha desviado históricamente el modelo, pero no constituye un intervalo de confianza ni "
+            "garantiza que el valor futuro se encuentre dentro de ella."
         )
-        titulo = "Incertidumbre: intervalo no publicado"
+        titulo = "Error histórico de referencia (±MAE)"
     else:
         # post-r1-metodologia-12-24, 19-08-2026 (Prompt 10). Metodologia final:
         # backtesting rectangular N0=12/H=24. No existe ya un "maximo
@@ -454,8 +463,6 @@ def _tabla_resultado_principal(
         ("Índice proyectado", formatear_indice(solicitado.get("indice_proyectado")) if proyeccion_generada else "No generado", "destacado"),
         ("Período proyectado", _formatear_periodo(solicitado.get("periodo_proyectado")) if proyeccion_generada else NO_APLICA, ""),
         ("Modelo aplicado", solicitado.get("modelo_aplicado") if proyeccion_generada else NO_APLICA, ""),
-        # P0-C RUTA C2: el intervalo se retira de las salidas; el calculo interno se conserva como diagnostico
-        ("Intervalo de predicción", "No se publica en esta versión", ""),
         ("Nivel de confianza", _texto_oracion(solicitado.get("nivel_confianza")), ""),
         ("Razón principal", solicitado.get("razon_principal"), ""),
         ("Tabla ICOCIV", fuente_visible, ""),
@@ -463,45 +470,39 @@ def _tabla_resultado_principal(
     return _tabla_clave_valor("Resultado del horizonte solicitado", filas, clase="principal")
 
 
-def _tabla_incertidumbre(proyeccion: dict[str, Any]) -> str:
+def _seccion_error_historico(proyeccion: dict[str, Any]) -> str:
+    # post-r1-metodologia-12-24, 19-08-2026 (Prompt 13). Sustituye la seccion
+    # "Incertidumbre" (que solo declaraba el intervalo de predicción retirado,
+    # P0-C, sin ocupar utilmente el espacio). IC80/IC95 productivos SIGUEN
+    # retirados -no se reintroducen aqui de ninguna forma-; en su lugar se
+    # muestra el MAE fuera de muestra del horizonte solicitado como
+    # referencia descriptiva del error historico. NO es un intervalo de
+    # confianza ni de prediccion probabilistico.
     if not _resultado_solicitado(proyeccion).get("proyeccion_generada"):
         return ""
-    # P0-C RUTA C2: el intervalo se retira de las salidas; el calculo interno se
-    # conserva como diagnostico. Una sola fila: antes habia dos identicas.
-    motivo = str(proyeccion.get("motivo_intervalo_no_sustentado") or "").strip()
+    backtesting = _backtesting_relevante(proyeccion)
+    metricas = backtesting.get("metricas") or {}
+    horizonte = _resultado_solicitado(proyeccion).get("horizonte_solicitado")
     filas = [
-        ("Intervalo de predicción", "No se publica en esta versión", ""),
-        ("Motivo", motivo or "El método del intervalo no está sustentado.", ""),
+        (f"MAE histórico (h={_fmt_entero(horizonte)})", formatear_valor(metricas.get("mae")), "destacado"),
+        (f"RMSE histórico (h={_fmt_entero(horizonte)})", formatear_valor(metricas.get("rmse")), ""),
+        (f"sMAPE histórico (h={_fmt_entero(horizonte)})", formatear_porcentaje(metricas.get("smape")), ""),
     ]
-    # P0-C / C2, 15-08-2026. Se retira tambien la COBERTURA de esa banda. Antes
-    # se publicaban aqui la cobertura observada del paso, su recuento x/y, la
-    # distancia al nivel nominal, la lectura descriptiva con las seis magnitudes,
-    # el criterio aplicado, el papel del valor 0,90, la advertencia de cobertura
-    # y el minimo global de la trayectoria. Todas ellas miden una banda que ya no
-    # se entrega: sin banda publicada, su cobertura no es un resultado, es un
-    # diagnostico del metodo retirado. NO se afirma que la cobertura sea
-    # invalida; se deja de publicarla.
-    #
-    # Lo que SI se conserva es el numero de errores fuera de muestra del paso
-    # exacto: es el tamano de la evidencia de ESE horizonte -lo que G-2 usa para
-    # decidir su estado- y no una medida de la banda.
+    mase = metricas.get("mase")
+    if isinstance(mase, (int, float)) and math.isfinite(mase):
+        filas.append((f"MASE histórico (h={_fmt_entero(horizonte)})", formatear_valor(mase), ""))
     paso = proyeccion.get("verificabilidad_paso_exacto") or {}
-    if paso.get("paso_exacto"):
-        filas.append((
-            "Errores OOS del paso exacto",
-            f"{_fmt_entero(paso.get('n_errores_oos'))} en h={int(paso['paso_exacto'])}",
-            "",
-        ))
+    w_h = backtesting.get("iteraciones") or paso.get("n_errores_oos")
+    if w_h:
+        filas.append(("Evaluaciones OOS disponibles (W_h)", _fmt_entero(w_h), ""))
     nota = (
-        "Esta versión NO publica intervalo de predicción: la construcción completa del método no "
-        "está sustentada y, mientras no lo esté, entregar sus límites sería afirmar una precisión "
-        "que la aplicación no puede defender. El pronóstico puntual sí se publica cuando es "
-        "calculable. La banda y su cobertura se siguen calculando como diagnóstico interno, y no "
-        "se afirma que la incertidumbre no exista: se afirma que no se puede acotar con un método "
-        "sustentado. Cuando se aplica el ajuste de cambio de año, la incertidumbre de ese ajuste "
-        "tampoco estaba incorporada a la banda retirada."
+        "La banda representa la magnitud media absoluta de los errores observados durante la "
+        "validación fuera de muestra para cada horizonte. Sirve como referencia visual de cuánto se "
+        "ha desviado históricamente el modelo, pero no constituye un intervalo de confianza ni "
+        "garantiza que el valor futuro se encuentre dentro de ella. Esta versión no publica un "
+        "intervalo de predicción: esa construcción no está metodológicamente sustentada."
     )
-    return _tabla_clave_valor("Incertidumbre", filas, nota=nota)
+    return _tabla_clave_valor("Error histórico de referencia (±MAE)", filas, nota=nota)
 
 
 def _clasificacion_intervalo(proyeccion: dict[str, Any]) -> dict[str, Any]:

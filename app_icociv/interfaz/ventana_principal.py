@@ -104,6 +104,7 @@ from app_icociv.reportes.generador_reportes import (
     generar_reporte_proyeccion,
 )
 from app_icociv.reportes.modelo import nombre_archivo_informe
+from app_icociv.proyeccion.servicio_proyeccion import H_OPERATIVO_MAX
 from app_icociv.utilidades.utilidades import ANIO_BASE, t_a_periodo
 from app_icociv.utilidades.nomenclatura_icociv import (
     ETIQUETA_TABLA_ACTIVA,
@@ -391,16 +392,20 @@ class VentanaPrincipal(QMainWindow):
         self.combo_horizonte.currentIndexChanged.connect(lambda _: self._horizonte_predefinido_cambiado())
 
         self.spin_horizonte_personalizado = SpinEnteroSinRueda()
-        self.spin_horizonte_personalizado.setRange(1, 60)
+        # post-r1-metodologia-12-24, 19-08-2026 (Prompt 13). Alcance operativo
+        # maximo de SAVIP: H_OPERATIVO_MAX=24. El control no debe permitir
+        # llegar a 25: es el bug de origen del horizonte personalizado.
+        self.spin_horizonte_personalizado.setRange(1, H_OPERATIVO_MAX)
         self.spin_horizonte_personalizado.setValue(18)
         self.spin_horizonte_personalizado.setMinimumHeight(ALTURA_CONTROL)
         self.spin_horizonte_personalizado.setEnabled(False)
         self.spin_horizonte_personalizado.setToolTip(
-            "Horizonte personalizado en meses; puede restringirse si la evidencia estadística no lo respalda."
+            f"Horizonte personalizado en meses (1 a {H_OPERATIVO_MAX}): el alcance máximo de proyección de "
+            "SAVIP es de 24 meses."
         )
         self.spin_horizonte_personalizado.valueChanged.connect(lambda _: self._meses_personalizados_cambiados())
 
-        self.lbl_horizonte_recomendado = QLabel("Horizonte estadístico: pendiente de análisis")
+        self.lbl_horizonte_recomendado = QLabel("Horizonte solicitado: pendiente de análisis")
         self.lbl_horizonte_recomendado.setObjectName("horizonte_recomendado")
         self.lbl_horizonte_recomendado.setWordWrap(True)
 
@@ -618,10 +623,14 @@ class VentanaPrincipal(QMainWindow):
                 ("horizonte", "Horizonte solicitado"),
                 ("modelo", "Modelo seleccionado"),
                 ("estado", "Estado del horizonte"),
-                # P0-C / C2: la tarjeta anunciaba el intervalo del 95 %. Se
-                # renombra: un rotulo con ese titulo y «No aplica» debajo se lee
-                # como un dato que falta, no como una decision metodologica.
-                ("ic95", "Intervalo de predicción"),
+                # post-r1-metodologia-12-24, 19-08-2026 (Prompt 13). Retirada
+                # la tarjeta de IC95 (intervalos productivos retirados desde
+                # P0-C): mostrar "No se publica" en una tarjeta principal
+                # invita al usuario a buscar algo que la metodologia no
+                # entrega. Se sustituye por una referencia util: el MAE
+                # historico del horizonte solicitado (NO es un intervalo de
+                # confianza, ver `_seccion_error_historico`).
+                ("error_historico", "Error histórico de referencia"),
                 ("maximo", "Alcance máximo de proyección"),
             )
         ):
@@ -825,10 +834,16 @@ class VentanaPrincipal(QMainWindow):
                 "no_admisible": "No admisible",
             }.get(str(solicitado.get("estado")), "No evaluado")
         )
-        # P0-C / C2: el intervalo no se publica. No se formatea la pareja
-        # -que ya viaja vacia desde el servicio- ni se deja «No aplica», que
-        # sugeriria que el dato no existe para este caso concreto.
-        self.valores_kpi["ic95"].setText("No se publica en esta versión")
+        # post-r1-metodologia-12-24, 19-08-2026 (Prompt 13). Sustituida la
+        # tarjeta de IC95 (retirado) por el MAE del horizonte solicitado: una
+        # referencia descriptiva del error historico, NO un intervalo de
+        # confianza. Ver `_seccion_error_historico` para la explicacion.
+        mae_h = ((proyeccion.get("backtesting") or {}).get("metricas") or {}).get("mae")
+        try:
+            mae_texto = f"± {float(mae_h):.4f} puntos" if mae_h is not None and float(mae_h) == float(mae_h) else "No disponible"
+        except (TypeError, ValueError):
+            mae_texto = "No disponible"
+        self.valores_kpi["error_historico"].setText(mae_texto if generado else "No disponible")
         self.valores_kpi["maximo"].setText(maximo_texto)
 
     def _crear_combo_nivel(self, accion_cambio) -> QComboBox:
@@ -909,6 +924,14 @@ class VentanaPrincipal(QMainWindow):
         return contenedor
 
     def _aumentar_mes(self) -> None:
+        # post-r1-metodologia-12-24, 19-08-2026 (Prompt 13). El boton "+" no
+        # debe permitir superar la fecha maxima de alcance (24 meses).
+        maximo = self._fecha_maxima_alcance()
+        if maximo is not None:
+            siguiente_anio = self.spin_anio.value() + (1 if self.spin_mes.value() == 12 else 0)
+            siguiente_mes = 1 if self.spin_mes.value() == 12 else self.spin_mes.value() + 1
+            if (siguiente_anio, siguiente_mes) > maximo:
+                return
         if self.spin_mes.value() < 12:
             self.spin_mes.stepUp()
             return
@@ -941,6 +964,18 @@ class VentanaPrincipal(QMainWindow):
         except (TypeError, ValueError):
             return None
         return anio, mes
+
+    def _fecha_maxima_alcance(self) -> tuple[int, int] | None:
+        """post-r1-metodologia-12-24, 19-08-2026 (Prompt 13). Ultima fecha
+        objetivo valida: ultimo periodo observado + H_OPERATIVO_MAX (24)
+        meses. Se calcula dinamicamente a partir de la serie cargada; no se
+        hardcodea ningun ano/mes."""
+        base = self._ultimo_periodo_serie()
+        if base is None:
+            return None
+        anio_base, mes_base = base
+        total = anio_base * 12 + (mes_base - 1) + H_OPERATIVO_MAX
+        return total // 12, (total % 12) + 1
 
     def _horizonte_desde_controles(self) -> int:
         """Horizonte que indican el desplegable y el spin de meses."""
@@ -1011,6 +1046,16 @@ class VentanaPrincipal(QMainWindow):
             return
         self._sincronizando = True
         try:
+            # post-r1-metodologia-12-24, 19-08-2026 (Prompt 13). Si la fecha
+            # objetivo editada manualmente supera el alcance maximo (24
+            # meses), se recorta a la ultima fecha valida en vez de dejar
+            # pasar un horizonte >24 al motor. Nunca se sale de 1..24.
+            if horizonte > H_OPERATIVO_MAX:
+                maximo = self._fecha_maxima_alcance()
+                if maximo is not None:
+                    self.spin_anio.setValue(maximo[0])
+                    self.spin_mes.setValue(maximo[1])
+                horizonte = H_OPERATIVO_MAX
             if 1 <= horizonte <= self.spin_horizonte_personalizado.maximum():
                 self.spin_horizonte_personalizado.setValue(int(horizonte))
             self._seleccionar_horizonte_en_combo(horizonte)
@@ -1053,12 +1098,18 @@ class VentanaPrincipal(QMainWindow):
         self._actualizar_etiqueta_horizonte_pendiente()
 
     def _actualizar_etiqueta_horizonte_pendiente(self) -> None:
-        """Mantiene coherente el texto de horizonte estadístico antes del análisis."""
+        """Mantiene coherente el texto del horizonte solicitado antes del análisis.
+
+        post-r1-metodologia-12-24, 19-08-2026 (Prompt 13). Retirado "Horizonte
+        estadístico: pendiente de análisis": esa nomenclatura pertenece a la
+        rejilla triangular retirada. El alcance máximo de SAVIP es fijo (24
+        meses, decisión operativa, no frontera estadística).
+        """
         if not hasattr(self, "lbl_horizonte_recomendado"):
             return
         base = self._ultimo_periodo_serie()
         if base is None:
-            self.lbl_horizonte_recomendado.setText("Horizonte estadístico: pendiente de análisis")
+            self.lbl_horizonte_recomendado.setText("Horizonte solicitado: pendiente de análisis")
             return
         horizonte = self._horizonte_solicitado()
         objetivo = f"{int(self.spin_anio.value()):04d}-{int(self.spin_mes.value()):02d}"
@@ -1069,7 +1120,8 @@ class VentanaPrincipal(QMainWindow):
             )
             return
         self.lbl_horizonte_recomendado.setText(
-            f"Horizonte estadístico: pendiente de análisis para {horizonte} mes(es) (objetivo {objetivo})."
+            f"Horizonte solicitado: {horizonte} mes(es) (objetivo {objetivo}). "
+            f"Alcance máximo de SAVIP: {H_OPERATIVO_MAX} meses."
         )
 
     def seleccionar_archivo(self) -> None:
@@ -1132,13 +1184,15 @@ class VentanaPrincipal(QMainWindow):
                 f"({base[0]:04d}-{base[1]:02d}). Ajuste el año, el mes o el horizonte.",
             )
             return
-        maximo = self.spin_horizonte_personalizado.maximum()
-        if horizonte > maximo:
+        # post-r1-metodologia-12-24, 19-08-2026 (Prompt 13). Mensaje correcto
+        # para h>24: no es un problema de "entero positivo" (MENSAJE_HORIZONTE_
+        # INVALIDO), sino de exceder el alcance operativo de SAVIP.
+        if horizonte > H_OPERATIVO_MAX:
             QMessageBox.warning(
                 self,
                 "Validación",
-                f"El horizonte solicitado ({horizonte} meses) supera el máximo operativo "
-                f"de {maximo} meses. Seleccione una fecha objetivo más cercana.",
+                "El horizonte solicitado debe estar entre 1 y 24 meses. "
+                "El alcance máximo de proyección de SAVIP es de 24 meses.",
             )
             return
 
@@ -1189,8 +1243,15 @@ class VentanaPrincipal(QMainWindow):
         # "escenario", que `_estructurar_resultado_horizontes` no produce
         # desde el 08-08-2026 (solo entrega "proyeccion_tecnica" o
         # "no_admisible"): la rama nunca se ejecutaba.
+        # post-r1-metodologia-12-24, 19-08-2026 (Prompt 13). Retirado
+        # "Horizonte estadístico": el mensaje ahora resume el modelo
+        # seleccionado y el horizonte efectivamente entregado.
         horizonte_info = proyeccion.get("horizonte_info", {})
-        self.lbl_horizonte_recomendado.setText(f"Horizonte estadístico: {horizonte_info.get('mensaje', '')}")
+        self.lbl_horizonte_recomendado.setText(
+            f"Horizonte solicitado: {solicitado.get('horizonte_solicitado', '')} meses. "
+            f"Modelo seleccionado: {horizonte_info.get('modelo_seleccionado') or 'No aplica'}. "
+            f"Alcance máximo de SAVIP: {H_OPERATIVO_MAX} meses."
+        )
         self.etiqueta_estado.setText("Proyección ejecutada correctamente.")
         self.lbl_dashboard_estado.setText("Análisis actualizado correctamente")
 
@@ -1620,16 +1681,45 @@ class VentanaPrincipal(QMainWindow):
                     color=colores["serie_proyeccion"],
                     label="Proyección",
                 )
-                # P0-C RUTA C2: el intervalo se retira de las salidas. Ninguno de los trece metodos auditados resulto adoptable y REQ 20 prohibe la combinacion que se venia publicando. El calculo interno se conserva como diagnostico; lo que desaparece es su PUBLICACION. No se sustituye por ninguna otra banda.
-                if False and {"limite_inferior_95", "limite_superior_95"}.issubset(proy_df.columns):
+                # post-r1-metodologia-12-24, 19-08-2026 (Prompt 13). P0-C RUTA
+                # C2: el intervalo de confianza (IC80/IC95) sigue retirado de
+                # las salidas. Ninguno de los trece metodos auditados resulto
+                # adoptable y REQ 20 prohibe la combinacion que se venia
+                # publicando; el calculo interno se conserva como diagnostico
+                # y no se publica.
+                #
+                # Lo que SI se dibuja es una banda puramente DESCRIPTIVA
+                # y_hat_h +/- MAE_h, tomada del MAE fuera de muestra por
+                # horizonte del modelo YA seleccionado (mismo rectangulo que
+                # decidio la seleccion, `horizonte_info.tabla_horizontes`). No
+                # es un intervalo de confianza ni de prediccion probabilistico:
+                # no decide nada, solo ilustra la magnitud historica del
+                # error. Se omite el punto donde MAE_h no existe o no es
+                # finito, sin inventar un valor.
+                horizonte_info_grafica = proyeccion.get("horizonte_info") or {}
+                mae_por_horizonte = {
+                    int(item["horizonte"]): item.get("mae")
+                    for item in (horizonte_info_grafica.get("tabla_horizontes") or [])
+                    if item.get("horizonte") is not None
+                }
+                limite_inf, limite_sup = [], []
+                for paso, valor in enumerate(y_future, start=1):
+                    mae_h = mae_por_horizonte.get(paso)
+                    if valor == valor and mae_h is not None and mae_h == mae_h:
+                        limite_inf.append(float(valor) - float(mae_h))
+                        limite_sup.append(float(valor) + float(mae_h))
+                    else:
+                        limite_inf.append(np.nan)
+                        limite_sup.append(np.nan)
+                if any(v == v for v in limite_inf):
                     eje.fill_between(
                         x_future,
-                        proy_df["limite_inferior_95"].astype(float).to_numpy(),
-                        proy_df["limite_superior_95"].astype(float).to_numpy(),
+                        limite_inf,
+                        limite_sup,
                         color=colores["banda_intervalo"],
                         alpha=0.16,
                         linewidth=0,
-                        label="Intervalo de predicción 95%",
+                        label="Referencia de error histórico (±MAE)",
                     )
         eje.set_title("Ajuste y proyección del índice ICOCIV", pad=12, fontsize=11, fontweight="600")
         eje.set_xlabel("Periodo (AAAA-MM)")
@@ -1922,7 +2012,7 @@ class VentanaPrincipal(QMainWindow):
             "horizonte": "Horizonte solicitado",
             "modelo": "Selección del modelo",
             "estado": "Estado del horizonte",
-            "ic95": "Intervalo de predicción",
+            "error_historico": "Error histórico de referencia",
             "maximo": "Alcance máximo de proyección",
         }
         html = construir_html_explicacion_tarjeta(
