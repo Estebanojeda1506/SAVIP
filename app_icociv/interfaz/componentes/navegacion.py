@@ -46,6 +46,10 @@ class NavegacionLateral(QFrame):
         self._contraida = False
         self._entradas = list(entradas)
         self.botones: list[QPushButton] = []
+        # post-r1-metodologia-12-24, 19-08-2026 (Prompt UI 01). Marca si una
+        # entrada tiene contenido disponible (p. ej. "Resultados" con una
+        # proyección ya calculada), independiente de si está seleccionada.
+        self._destacados: list[bool] = []
         # Acciones de archivo y sesión: viven aquí, no en una segunda columna.
         self._acciones: list[tuple[QWidget, str, str]] = []
         self._widgets_solo_expandido: list[QWidget] = []
@@ -83,6 +87,7 @@ class NavegacionLateral(QFrame):
             self._grupo.addButton(boton, indice)
             layout.addWidget(boton)
             self.botones.append(boton)
+            self._destacados.append(False)
 
         # Grupo secundario: archivo y sesión, DESPUÉS de la navegación. Arriba
         # competían con los módulos por la primera lectura del panel.
@@ -166,6 +171,41 @@ class NavegacionLateral(QFrame):
         if 0 <= indice < len(self.botones):
             self.botones[indice].setChecked(True)
 
+    def establecer_destacado(self, indice: int, destacado: bool) -> None:
+        """Marca (o quita) el indicador de "hay contenido disponible" de una
+        entrada, sin tocar cuál está seleccionada. Reutiliza el patrón de
+        propiedad dinámica + repolish ya usado en CabeceraApp/TarjetaKPI."""
+        if not (0 <= indice < len(self.botones)):
+            return
+        destacado = bool(destacado)
+        if self._destacados[indice] == destacado:
+            return
+        self._destacados[indice] = destacado
+        boton = self.botones[indice]
+        boton.setProperty("destacado", destacado)
+        boton.style().unpolish(boton)
+        boton.style().polish(boton)
+        self._actualizar_texto_boton(indice)
+
+    def _actualizar_texto_boton(self, indice: int) -> None:
+        """Aplica texto y tooltip de una entrada según contracción y destacado.
+
+        El color nunca es la única señal: en modo expandido se añade un
+        símbolo textual (●) y el tooltip lo confirma en palabras.
+        """
+        _clave, texto, descripcion = self._entradas[indice]
+        boton = self.botones[indice]
+        destacado = self._destacados[indice]
+        if self._contraida:
+            boton.setText(texto[:1].upper())
+            tooltip = f"{texto}. {descripcion}" if descripcion else texto
+        else:
+            boton.setText(f"{texto} ●" if destacado else texto)
+            tooltip = descripcion or texto
+        if destacado:
+            tooltip = f"{tooltip} (hay resultados disponibles)" if tooltip else "Hay resultados disponibles"
+        boton.setToolTip(tooltip)
+
     def indice_actual(self) -> int:
         return self._grupo.checkedId()
 
@@ -183,14 +223,8 @@ class NavegacionLateral(QFrame):
             if self._contraida
             else tokens.NAVEGACION_ANCHO_EXPANDIDO
         )
-        for boton, (_clave, texto, descripcion) in zip(self.botones, self._entradas):
-            if self._contraida:
-                # Sin texto, la inicial actúa de icono y el nombre vive en el tooltip.
-                boton.setText(texto[:1].upper())
-                boton.setToolTip(f"{texto}. {descripcion}" if descripcion else texto)
-            else:
-                boton.setText(texto)
-                boton.setToolTip(descripcion or texto)
+        for indice in range(len(self.botones)):
+            self._actualizar_texto_boton(indice)
         # Las acciones de archivo y sesión se contraen con el resto del panel:
         # el texto deja paso a una marca corta y el nombre pasa al tooltip.
         for widget, texto_original, marca in self._acciones:

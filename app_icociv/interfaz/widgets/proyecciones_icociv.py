@@ -260,9 +260,12 @@ class WidgetProyeccionesICOCIV(QWidget):
         acc_proy = QHBoxLayout()
         boton_detalle_proy = QPushButton("Ver detalle")
         boton_detalle_proy.clicked.connect(self._detalle_proyeccion)
-        boton_eliminar_proy = QPushButton("Eliminar")
+        boton_eliminar_proy = QPushButton("Eliminar seleccionado")
         boton_eliminar_proy.clicked.connect(self._eliminar_proyeccion)
-        for boton in (boton_detalle_proy, boton_eliminar_proy):
+        boton_eliminar_todo_proy = QPushButton("Eliminar todo")
+        boton_eliminar_todo_proy.setObjectName("boton_secundario")
+        boton_eliminar_todo_proy.clicked.connect(self._eliminar_todas_proyecciones)
+        for boton in (boton_detalle_proy, boton_eliminar_proy, boton_eliminar_todo_proy):
             acc_proy.addWidget(boton)
         acc_proy.addStretch()
         layout.addLayout(acc_proy)
@@ -277,11 +280,14 @@ class WidgetProyeccionesICOCIV(QWidget):
         acc_val = QHBoxLayout()
         boton_detalle_val = QPushButton("Ver detalle")
         boton_detalle_val.clicked.connect(self._detalle_valor)
-        boton_eliminar_val = QPushButton("Eliminar")
+        boton_eliminar_val = QPushButton("Eliminar seleccionado")
         boton_eliminar_val.clicked.connect(self._eliminar_valor)
+        boton_eliminar_todo_val = QPushButton("Eliminar todo")
+        boton_eliminar_todo_val.setObjectName("boton_secundario")
+        boton_eliminar_todo_val.clicked.connect(self._eliminar_todos_valores)
         self.boton_exportar = QPushButton("Exportar Excel")
         self.boton_exportar.clicked.connect(self._exportar_excel)
-        for boton in (boton_detalle_val, boton_eliminar_val, self.boton_exportar):
+        for boton in (boton_detalle_val, boton_eliminar_val, boton_eliminar_todo_val, self.boton_exportar):
             acc_val.addWidget(boton)
         acc_val.addStretch()
         layout.addLayout(acc_val)
@@ -388,12 +394,51 @@ class WidgetProyeccionesICOCIV(QWidget):
         if indice is not None and 0 <= indice < len(self.proyecciones):
             del self.proyecciones[indice]
             self._refrescar_tabla_proyecciones()
+        else:
+            QMessageBox.information(self, "Eliminar", "Seleccione primero una fila de la tabla para eliminarla.")
 
     def _eliminar_valor(self) -> None:
         indice = _seleccion(self.tabla_valores)
         if indice is not None and 0 <= indice < len(self.valores):
             del self.valores[indice]
             self._refrescar_tabla_valores()
+        else:
+            QMessageBox.information(self, "Eliminar", "Seleccione primero una fila de la tabla para eliminarla.")
+
+    # post-r1-metodologia-12-24, 19-08-2026 (Prompt UI 01). "Eliminar todo"
+    # vacía la vista y la lista interna que la respalda; el excel exportable
+    # y el estado de la calculadora ya leen esas mismas listas por
+    # referencia, así que reflejan el vacío sin pasos adicionales.
+    def _eliminar_todas_proyecciones(self) -> None:
+        if not self.proyecciones:
+            return
+        if not self._confirmar_eliminar_todo():
+            return
+        self.proyecciones.clear()
+        self._refrescar_tabla_proyecciones()
+        self._actualizar_estado_calculadora()
+
+    def _eliminar_todos_valores(self) -> None:
+        if not self.valores:
+            return
+        if not self._confirmar_eliminar_todo():
+            return
+        self.valores.clear()
+        self._refrescar_tabla_valores()
+        self._actualizar_estado_calculadora()
+
+    def _confirmar_eliminar_todo(self) -> bool:
+        caja = QMessageBox(self)
+        caja.setIcon(QMessageBox.Icon.Warning)
+        caja.setWindowTitle("Eliminar todos los registros")
+        caja.setText(
+            "¿Desea eliminar todos los análisis/proyecciones de esta tabla? Esta acción quitará "
+            "los resultados almacenados en la sesión actual."
+        )
+        boton_eliminar = caja.addButton("Eliminar", QMessageBox.ButtonRole.DestructiveRole)
+        caja.addButton("Cancelar", QMessageBox.ButtonRole.RejectRole)
+        caja.exec()
+        return caja.clickedButton() is boton_eliminar
 
     def _exportar_excel(self) -> None:
         if not self.proyecciones and not self.valores:

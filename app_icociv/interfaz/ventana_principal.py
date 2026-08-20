@@ -208,6 +208,10 @@ class VentanaPrincipal(QMainWindow):
         # Evita ciclos infinitos en la sincronización bidireccional de los
         # parámetros de proyección (horizonte, meses, año y mes).
         self._sincronizando = False
+        # post-r1-metodologia-12-24, 19-08-2026 (Prompt UI 01). Un intento de
+        # superar el alcance operativo (>24 meses) muestra un solo popup;
+        # esta bandera evita repetirlo mientras el valor siga fuera de rango.
+        self._horizonte_popup_mostrado = False
         self.resultado_ui_actual: dict[str, Any] | None = None
         self.detalles_horizonte: dict[int, dict[str, Any]] = {}
         self.horizonte_detalle_actual: int | None = None
@@ -404,6 +408,14 @@ class VentanaPrincipal(QMainWindow):
             "SAVIP es de 24 meses."
         )
         self.spin_horizonte_personalizado.valueChanged.connect(lambda _: self._meses_personalizados_cambiados())
+        # post-r1-metodologia-12-24, 19-08-2026 (Prompt UI 01). El rango del
+        # spin (1..H_OPERATIVO_MAX) ya impide que valueChanged reciba un 25,
+        # porque Qt normaliza el valor antes de emitir la señal. Para detectar
+        # el intento real hay que mirar el texto tecleado en el QLineEdit
+        # interno, antes de esa normalización.
+        self.spin_horizonte_personalizado.lineEdit().textEdited.connect(
+            self._detectar_horizonte_personalizado_excedido
+        )
 
         self.lbl_horizonte_recomendado = QLabel("Horizonte solicitado: pendiente de análisis")
         self.lbl_horizonte_recomendado.setObjectName("horizonte_recomendado")
@@ -434,12 +446,17 @@ class VentanaPrincipal(QMainWindow):
 
         # La navegación entre módulos se separa del formulario de selección: en
         # el diseño anterior competían por la atención dentro del mismo panel.
+        # post-r1-metodologia-12-24, 19-08-2026 (Prompt UI 01). Orden final:
+        # Inicio, Proyecciones ICOCIV, Empalme, Resultados. Esta lista, las
+        # pestañas de self.tabs_principales y SECCIONES deben mantenerse
+        # sincronizadas por posición: no hay un índice nombrado por página,
+        # salvo INDICE_RESULTADOS.
         self.navegacion = NavegacionLateral(
             [
                 ("inicio", "Inicio", "Resumen del archivo cargado y accesos rápidos"),
-                ("resultados", "Resultados", "Panel de análisis, métricas y proyección"),
                 ("proyecciones", "Proyecciones ICOCIV", "Calculadora y tablas acumulativas"),
                 ("empalme", "Empalme ICCP-ICOCIV", "Actualización de precios por empalme"),
+                ("resultados", "Resultados", "Panel de análisis, métricas y proyección"),
             ]
         )
         self.navegacion.seleccion_cambiada.connect(self._cambiar_seccion)
@@ -580,9 +597,9 @@ class VentanaPrincipal(QMainWindow):
         self.tabs_principales = QTabWidget()
         self.tabs_principales.setDocumentMode(True)
         self.tabs_principales.addTab(self.pantalla_inicio, "Inicio")
-        self.tabs_principales.addTab(panel_resultados, "Resultados")
         self.tabs_principales.addTab(self.widget_proyecciones, "Proyecciones ICOCIV")
         self.tabs_principales.addTab(self.widget_empalme, "Empalme ICCP-ICOCIV")
+        self.tabs_principales.addTab(panel_resultados, "Resultados")
         self.tabs_principales.tabBar().hide()
         self.tabs_principales.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
@@ -708,6 +725,7 @@ class VentanaPrincipal(QMainWindow):
         self._ordenar_tabulacion()
         self._cambiar_seccion(0)
         self._ocultar_niveles()
+        self._actualizar_indicador_resultados()
 
     def _ordenar_tabulacion(self) -> None:
         """El recorrido con Tab sigue el orden visual del panel, no el de creación."""
@@ -743,13 +761,25 @@ class VentanaPrincipal(QMainWindow):
         return tarjeta, valor
 
     # Índice de pestaña -> (nombre visible, muestra el panel de selección).
+    # post-r1-metodologia-12-24, 19-08-2026 (Prompt UI 01). Orden final del
+    # menú lateral: Inicio, Proyecciones ICOCIV, Empalme, Resultados.
     SECCIONES = (
         ("Inicio", False),
-        ("Resultados", True),
         ("Proyecciones ICOCIV", True),
         ("Empalme ICCP-ICOCIV", True),
+        ("Resultados", True),
     )
-    INDICE_RESULTADOS = 1
+    INDICE_RESULTADOS = 3
+
+    def _actualizar_indicador_resultados(self) -> None:
+        """post-r1-metodologia-12-24, 19-08-2026 (Prompt UI 01). Única función que
+        decide si "Resultados" se destaca en la navegación: existe una proyección
+        cargada (self.resultado_ui_actual) o no. Se llama desde cada punto que
+        cambia esa disponibilidad, para no duplicar la regla en varias ventanas."""
+        if hasattr(self, "navegacion"):
+            self.navegacion.establecer_destacado(
+                self.INDICE_RESULTADOS, self.resultado_ui_actual is not None
+            )
 
     def _cambiar_seccion(self, indice: int) -> None:
         indice = max(0, min(int(indice), len(self.SECCIONES) - 1))
@@ -923,6 +953,34 @@ class VentanaPrincipal(QMainWindow):
         layout.addWidget(boton_mas)
         return contenedor
 
+    def _alertar_horizonte_excedido(self) -> None:
+        """post-r1-metodologia-12-24, 19-08-2026 (Prompt UI 01). Ventana emergente
+        que explica el limite de 24 meses cuando el usuario intenta superarlo, por
+        cualquier ruta de la UI. Un intento produce un solo popup."""
+        caja = QMessageBox(self)
+        caja.setIcon(QMessageBox.Icon.Information)
+        caja.setWindowTitle("Horizonte fuera del alcance de SAVIP")
+        caja.setText("SAVIP permite realizar proyecciones entre 1 y 24 meses.")
+        caja.setInformativeText(
+            "El máximo de 24 meses corresponde al alcance operativo definido para la "
+            "herramienta. Seleccione un periodo igual o inferior a 24 meses."
+        )
+        caja.exec()
+
+    def _detectar_horizonte_personalizado_excedido(self, texto: str) -> None:
+        """Detecta un intento manual de escribir >24 antes de que Qt lo normalice."""
+        try:
+            valor = int(texto.strip())
+        except (TypeError, ValueError):
+            self._horizonte_popup_mostrado = False
+            return
+        if valor > H_OPERATIVO_MAX:
+            if not self._horizonte_popup_mostrado:
+                self._horizonte_popup_mostrado = True
+                self._alertar_horizonte_excedido()
+        else:
+            self._horizonte_popup_mostrado = False
+
     def _aumentar_mes(self) -> None:
         # post-r1-metodologia-12-24, 19-08-2026 (Prompt 13). El boton "+" no
         # debe permitir superar la fecha maxima de alcance (24 meses).
@@ -931,6 +989,7 @@ class VentanaPrincipal(QMainWindow):
             siguiente_anio = self.spin_anio.value() + (1 if self.spin_mes.value() == 12 else 0)
             siguiente_mes = 1 if self.spin_mes.value() == 12 else self.spin_mes.value() + 1
             if (siguiente_anio, siguiente_mes) > maximo:
+                self._alertar_horizonte_excedido()
                 return
         if self.spin_mes.value() < 12:
             self.spin_mes.stepUp()
@@ -1051,6 +1110,7 @@ class VentanaPrincipal(QMainWindow):
             # meses), se recorta a la ultima fecha valida en vez de dejar
             # pasar un horizonte >24 al motor. Nunca se sale de 1..24.
             if horizonte > H_OPERATIVO_MAX:
+                self._alertar_horizonte_excedido()
                 maximo = self._fecha_maxima_alcance()
                 if maximo is not None:
                     self.spin_anio.setValue(maximo[0])
@@ -1213,6 +1273,7 @@ class VentanaPrincipal(QMainWindow):
         proyeccion = resultado["proyeccion"]
         solicitado = proyeccion.get("resultado_horizonte_solicitado") or {}
         self.resultado_ui_actual = resultado
+        self._actualizar_indicador_resultados()
         evaluaciones = (proyeccion.get("analisis_horizontes_completo") or {}).get("tabla_horizontes") or []
         self.detalles_horizonte = {
             int(item.get("horizonte")): item

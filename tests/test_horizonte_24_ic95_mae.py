@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
@@ -89,15 +90,23 @@ def test_caso2_fecha_maxima_alcance_dinamica():
     maximo = ventana._fecha_maxima_alcance()
     assert maximo == (2028, 5), f"mayo 2026 + 24 meses debe ser mayo 2028, obtuvo {maximo}"
 
-    # h=24 (mayo 2028) debe ser valido
-    ventana._sincronizando = False
-    ventana.spin_anio.setValue(2028)
-    ventana.spin_mes.setValue(5)
-    assert ventana._horizonte_desde_periodo() == 24
+    # Se parchea el popup (Prompt UI 01) para todo el resto de la prueba:
+    # spin_anio y spin_mes se actualizan uno a la vez, y el valor intermedio
+    # (p.ej. cambiar solo el anio mientras el mes por defecto sigue en 6)
+    # puede cruzar momentaneamente >24 meses y disparar el popup real, que
+    # sin usuario que lo cierre bloquearia la prueba indefinidamente.
+    with patch.object(type(ventana), "_alertar_horizonte_excedido", return_value=None) as popup:
+        # h=24 (mayo 2028) debe ser valido
+        ventana._sincronizando = False
+        ventana.spin_anio.setValue(2028)
+        ventana.spin_mes.setValue(5)
+        assert ventana._horizonte_desde_periodo() == 24
 
-    # junio 2028 (h=25) debe recortarse de vuelta a mayo 2028 (h=24)
-    ventana.spin_anio.setValue(2028)
-    ventana.spin_mes.setValue(6)
+        # junio 2028 (h=25) debe recortarse de vuelta a mayo 2028 (h=24).
+        popup.reset_mock()
+        ventana.spin_anio.setValue(2028)
+        ventana.spin_mes.setValue(6)
+        assert popup.called
     assert (int(ventana.spin_anio.value()), int(ventana.spin_mes.value())) == (2028, 5), (
         "la fecha objetivo debe recortarse a la fecha maxima de alcance, no aceptar h=25"
     )

@@ -390,8 +390,10 @@ def test_modo_oscuro_cambia_ui_grafica_html_y_persiste_preferencia() -> None:
         assert len(ventana.tarjetas_kpi) == 6
         # Se comprueba por nombre y no por cantidad: contar botones dejaba la
         # prueba obsoleta cada vez que se anadia una pantalla.
+        # post-r1-metodologia-12-24, 19-08-2026 (Prompt UI 01). Orden final
+        # del menu lateral: Inicio, Proyecciones ICOCIV, Empalme, Resultados.
         etiquetas = [boton.text() for boton in ventana.botones_navegacion]
-        assert etiquetas == ["Inicio", "Resultados", "Proyecciones ICOCIV", "Empalme ICCP-ICOCIV"], etiquetas
+        assert etiquetas == ["Inicio", "Proyecciones ICOCIV", "Empalme ICCP-ICOCIV", "Resultados"], etiquetas
         # La cabecera conserva el selector unico de exportacion (DOCX/PDF/CSV).
         assert ventana.acciones_cabecera.count() == 1
         assert ventana.acciones_cabecera.itemAt(0).widget() is ventana.boton_exportar_informe

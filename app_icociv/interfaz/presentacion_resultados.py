@@ -198,6 +198,7 @@ def construir_html_explicacion_tarjeta(
         # ya no puede tomar (ver comentario H-4 en _interpretacion_estado).
         nota = "El estado resume si el horizonte puede usarse técnicamente o si debe negarse."
         titulo = "Explicación del estado del horizonte"
+        return _estilos_html(tema) + _tabla_clave_valor(titulo, filas, nota=nota) + _bloque_glosario_estados()
     elif clave == "error_historico":
         # post-r1-metodologia-12-24, 19-08-2026 (Prompt 13). IC80/IC95
         # productivos siguen retirados (P0-C); esta tarjeta ya no invita al
@@ -264,6 +265,45 @@ def _interpretacion_estado(estado: Any) -> str:
         "proyeccion_tecnica": "Puede usarse como proyección técnica, conservando sus advertencias y su evidencia fuera de muestra.",
         "no_admisible": "La evidencia disponible no respalda generar la proyección solicitada.",
     }.get(str(estado), NO_EVALUADO)
+
+
+# post-r1-metodologia-12-24, 19-08-2026 (Prompt UI 01). Glosario del panel
+# "Estado del horizonte". Los dos primeros son los únicos valores reales que
+# `_estructurar_resultado_horizontes` puede producir (ver comentario H-4
+# residual en `_estado_solicitado_visible`, arriba); el tercero cubre el
+# único caso restante visible en la UI: que aún no exista un resultado. No
+# incluye estados retirados (ej. "escenario") ni conceptos fuera de alcance
+# (IC95, tolerancia sMAPE).
+GLOSARIO_ESTADOS_HORIZONTE = (
+    (
+        "Proyección técnica",
+        "La aplicación pudo generar la proyección solicitada dentro del alcance operativo de SAVIP "
+        "(1 a 24 meses) y dispone de evaluación histórica fuera de muestra para ese resultado.",
+    ),
+    (
+        "No admisible",
+        "La evidencia disponible no respalda generar la proyección para el horizonte solicitado "
+        "(por ejemplo, el punto no es matemáticamente calculable o falta el dato necesario); SAVIP no "
+        "produce un valor proyectado en ese caso.",
+    ),
+    (
+        "No disponible / No evaluado",
+        "Todavía no se ejecutó un análisis para esta serie, o el resultado mostrado no incluye este campo.",
+    ),
+)
+
+
+def _bloque_glosario_estados() -> str:
+    filas = "".join(
+        f"<tr><th>{escape(estado)}</th><td>{escape(significado)}</td></tr>"
+        for estado, significado in GLOSARIO_ESTADOS_HORIZONTE
+    )
+    return (
+        "<section class='bloque glosario-estados'>"
+        "<h2>Glosario de estados</h2>"
+        "<table class='kv'><thead><tr><th>Estado</th><th>Significado</th></tr></thead>"
+        f"<tbody>{filas}</tbody></table></section>"
+    )
 
 
 def valor_o_no_disponible(valor: Any) -> str:

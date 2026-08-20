@@ -365,6 +365,8 @@ class WidgetEmpalmeICCPICOCIV(QWidget):
         self.boton_detalle = QPushButton("Ver detalle seleccionado")
         self.boton_editar = QPushButton("Editar seleccionado")
         self.boton_eliminar = QPushButton("Eliminar seleccionado")
+        self.boton_eliminar_todo = QPushButton("Eliminar todo")
+        self.boton_eliminar_todo.setObjectName("boton_secundario")
         self.boton_exportar = QPushButton("Exportar Excel")
         self.boton_informe = QPushButton("Generar informe")
         self.boton_informe.setToolTip(
@@ -373,11 +375,13 @@ class WidgetEmpalmeICCPICOCIV(QWidget):
         self.boton_detalle.clicked.connect(self.ver_detalle_seleccionado)
         self.boton_editar.clicked.connect(self.editar_seleccionado)
         self.boton_eliminar.clicked.connect(self.eliminar_seleccionado)
+        self.boton_eliminar_todo.clicked.connect(self.eliminar_todo)
         self.boton_exportar.clicked.connect(self.exportar_excel)
         self.boton_informe.clicked.connect(self.generar_informe)
         acciones.addWidget(self.boton_detalle)
         acciones.addWidget(self.boton_editar)
         acciones.addWidget(self.boton_eliminar)
+        acciones.addWidget(self.boton_eliminar_todo)
         acciones.addWidget(self.boton_exportar)
         acciones.addWidget(self.boton_informe)
         acciones.addStretch()
@@ -482,8 +486,34 @@ class WidgetEmpalmeICCPICOCIV(QWidget):
     def eliminar_seleccionado(self) -> None:
         indice = self._fila_seleccionada()
         if indice is None:
+            QMessageBox.information(self, "Eliminar", "Seleccione primero una fila de la tabla para eliminarla.")
             return
         del self.calculos[indice]
+        self.indice_edicion = None
+        self.boton_calcular.setText("Calcular actualización")
+        self._renumerar()
+        self._actualizar_tabla()
+
+    # post-r1-metodologia-12-24, 19-08-2026 (Prompt UI 01). No toca las
+    # fórmulas del empalme (ver calcular_empalme_iccp_icociv); solo vacía la
+    # lista de cálculos acumulados y su vista. Exportar Excel/Generar informe
+    # ya leen self.calculos por referencia, así que reflejan el vacío solos.
+    def eliminar_todo(self) -> None:
+        if not self.calculos:
+            return
+        caja = QMessageBox(self)
+        caja.setIcon(QMessageBox.Icon.Warning)
+        caja.setWindowTitle("Eliminar todos los registros")
+        caja.setText(
+            "¿Desea eliminar todos los análisis/proyecciones de esta tabla? Esta acción quitará "
+            "los resultados almacenados en la sesión actual."
+        )
+        boton_eliminar = caja.addButton("Eliminar", QMessageBox.ButtonRole.DestructiveRole)
+        caja.addButton("Cancelar", QMessageBox.ButtonRole.RejectRole)
+        caja.exec()
+        if caja.clickedButton() is not boton_eliminar:
+            return
+        self.calculos.clear()
         self.indice_edicion = None
         self.boton_calcular.setText("Calcular actualización")
         self._renumerar()

@@ -155,6 +155,18 @@ class DialogoConfiguracionInforme(QDialog):
         disposicion = QVBoxLayout(contenedor)
         disposicion.setContentsMargins(0, 8, 0, 0)
 
+        # post-r1-metodologia-12-24, 19-08-2026 (Prompt UI 01). "Seleccionar
+        # todas" marca de un clic todas las casillas habilitadas de Secciones
+        # y Gráficas; se convierte en "Deseleccionar todas" cuando ya están
+        # todas marcadas.
+        self.boton_seleccionar_todas = QPushButton("Seleccionar todas", contenedor)
+        self.boton_seleccionar_todas.setObjectName("boton_secundario")
+        self.boton_seleccionar_todas.clicked.connect(self._alternar_seleccionar_todas)
+        fila_seleccionar_todas = QHBoxLayout()
+        fila_seleccionar_todas.addWidget(self.boton_seleccionar_todas)
+        fila_seleccionar_todas.addStretch(1)
+        disposicion.addLayout(fila_seleccionar_todas)
+
         disposicion.addWidget(self._grupo_casillas(
             "Secciones", SECCIONES_DISPONIBLES, self.casillas_seccion, columnas=2,
         ))
@@ -185,9 +197,18 @@ class DialogoConfiguracionInforme(QDialog):
         for indice, (clave, etiqueta) in enumerate(definiciones):
             casilla = QCheckBox(etiqueta, grupo)
             casilla.toggled.connect(self._marca_personalizado)
+            casilla.toggled.connect(lambda _=None: self._actualizar_texto_seleccionar_todas())
             destino[clave] = casilla
             rejilla.addWidget(casilla, indice // columnas, indice % columnas)
         return grupo
+
+    def _casillas_seleccionables(self) -> list[QCheckBox]:
+        """Todas las casillas de Secciones y Gráficas que el usuario puede tocar."""
+        return [
+            casilla
+            for casilla in (*self.casillas_seccion.values(), *self.casillas_grafica.values())
+            if casilla.isEnabled()
+        ]
 
     def _pestana_institucional(self) -> QWidget:
         contenedor = QWidget(self)
@@ -268,6 +289,30 @@ class DialogoConfiguracionInforme(QDialog):
             self.casilla_anexo_backtesting.setChecked(False)
         finally:
             self._aplicando_preset = False
+        self._actualizar_texto_seleccionar_todas()
+
+    def _alternar_seleccionar_todas(self) -> None:
+        """Un clic marca todas las casillas habilitadas; si ya estaban todas
+        marcadas, el mismo botón las desmarca."""
+        casillas = self._casillas_seleccionables()
+        if not casillas:
+            return
+        marcar = not all(casilla.isChecked() for casilla in casillas)
+        self._aplicando_preset = True
+        try:
+            for casilla in casillas:
+                casilla.setChecked(marcar)
+        finally:
+            self._aplicando_preset = False
+        self._marca_personalizado()
+        self._actualizar_texto_seleccionar_todas()
+
+    def _actualizar_texto_seleccionar_todas(self) -> None:
+        if not hasattr(self, "boton_seleccionar_todas"):
+            return
+        casillas = self._casillas_seleccionables()
+        todas_marcadas = bool(casillas) and all(casilla.isChecked() for casilla in casillas)
+        self.boton_seleccionar_todas.setText("Deseleccionar todas" if todas_marcadas else "Seleccionar todas")
 
     def _marca_personalizado(self) -> None:
         """Una selección que ya no coincide con la plantilla deja de ser esa plantilla."""

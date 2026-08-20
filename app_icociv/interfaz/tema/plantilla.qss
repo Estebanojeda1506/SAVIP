@@ -112,6 +112,23 @@ QPushButton#boton_navegacion:focus {{
     border: {grosor_borde_foco}px solid {foco};
 }}
 
+/* post-r1-metodologia-12-24, 19-08-2026 (Prompt UI 01). "destacado" señala
+ * que la entrada tiene contenido disponible (p. ej. Resultados con una
+ * proyección ya calculada); es independiente de ":checked" (seleccionada),
+ * por lo que ambos estados se combinan sin pisarse. */
+QPushButton#boton_navegacion[destacado="true"] {{
+    color: {principal};
+    font-weight: {peso_medio};
+    border-left: {grosor_borde_foco}px solid {principal};
+}}
+
+QPushButton#boton_navegacion:checked[destacado="true"] {{
+    background: {navegacion_seleccionada};
+    color: {principal};
+    font-weight: {peso_fuerte};
+    border-left: {grosor_borde_foco}px solid {principal};
+}}
+
 QLabel#nav_grupo {{
     color: {texto_terciario};
     font-size: {tamano_micro}pt;
