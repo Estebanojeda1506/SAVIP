@@ -165,8 +165,16 @@ def ajustar_modelo_interpretable(
     t: Any,
     y: Any,
     forzar_tendencia: bool = False,
+    calcular_diagnostico_residuos: bool = True,
 ) -> dict[str, Any]:
-    """Ajusta un modelo por nombre y devuelve predicción, residuos y métricas."""
+    """Ajusta un modelo por nombre y devuelve predicción, residuos y métricas.
+
+    ``calcular_diagnostico_residuos=False`` omite los contrastes de residuos
+    (Durbin-Watson, ACF/PACF, Ljung-Box, Jarque-Bera, Breusch-Pagan, prueba t),
+    que no se leen en ningun punto del walk-forward de backtesting -solo el
+    ajuste final sobre toda la historia los publica-. Ahi representaban cerca
+    de la mitad del tiempo de una proyeccion completa (perfilado 20-08-2026).
+    """
     t_arr, y_arr = _limpiar_xy(t, y)
     if len(y_arr) < 2:
         raise ValueError("Se requieren al menos dos observaciones para ajustar modelo.")
@@ -213,7 +221,7 @@ def ajustar_modelo_interpretable(
         # Benchmarks simples no tienen verosimilitud comparable con OLS/Huber.
         metricas["aic"] = float("inf")
         metricas["aicc"] = float("inf")
-    diagnostico = evaluar_residuos(residuos, tipo_modelo=nombre)
+    diagnostico = evaluar_residuos(residuos, tipo_modelo=nombre) if calcular_diagnostico_residuos else {}
     resultado.update(
         {
             "t_obs": t_arr,

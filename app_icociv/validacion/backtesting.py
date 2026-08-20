@@ -78,7 +78,9 @@ def ejecutar_backtesting(
             if modelo == "seleccion_automatica":
                 modelo_ajustado = _seleccionar_en_corte(t_train, y_train, t_objetivo)
             else:
-                modelo_ajustado = ajustar_modelo_interpretable(modelo, t_train, y_train)
+                modelo_ajustado = ajustar_modelo_interpretable(
+                    modelo, t_train, y_train, calcular_diagnostico_residuos=False
+                )
             y_pred = float(modelo_ajustado["predict"]([t_objetivo])[0])
         except Exception as exc:
             errores.append(f"Fallo en corte {corte}: {exc}")
@@ -139,6 +141,150 @@ def ejecutar_backtesting(
     }
 
 
+def ejecutar_backtesting_multi_horizonte(
+    serie_df: pd.DataFrame,
+    horizontes: tuple[int, ...],
+    anio_base: int = ANIO_BASE,
+    entrenamiento_inicial: int | None = None,
+    modelo: str = "seleccion_automatica",
+    modelos_catalogo: tuple[str, ...] | list[str] | None = None,
+) -> dict[int, dict[str, Any]]:
+    """Walk-forward de un modelo para varios horizontes, ajustando cada origen
+    UNA sola vez y reutilizando ese ajuste para todos los horizontes.
+
+    La prediccion en un origen concreto depende solo de los datos disponibles
+    hasta ese origen (t_train, y_train), no del horizonte al que se evalue
+    -el mismo principio que ya documenta `_matriz_rectangular_12_24`-. Antes de
+    esta funcion, `ejecutar_backtesting_comparativo` reajustaba el modelo en el
+    mismo origen una vez por cada horizonte de 1 a 24, es decir 24 ajustes
+    identicos para producir 24 predicciones distintas del mismo modelo ya
+    entrenado. Perfilado 20-08-2026: eran fits/origen redundantes, la mayor
+    fuente de tiempo de una proyeccion completa junto al diagnostico de
+    residuos ya evitado en el walk-forward (ver `ajustar_modelo_interpretable`).
+
+    Para cada horizonte devuelve exactamente el mismo resultado -mismas
+    predicciones, mismas metricas- que llamar a `ejecutar_backtesting` una vez
+    por horizonte con el mismo `entrenamiento_inicial`.
+    """
+    serie = _preparar_serie(serie_df, anio_base)
+    n = len(serie)
+    minimo = observaciones_minimas_catalogo(modelos_catalogo)
+    entrenamiento_inicial = _entrenamiento_inicial(n, entrenamiento_inicial, modelos_catalogo)
+
+    resultados: dict[int, dict[str, Any]] = {}
+    if n < minimo + 1:
+        msg = f"La serie tiene menos de {minimo + 1} observaciones para backtesting."
+        for h in horizontes:
+            resultados[int(h)] = _resultado_sin_backtesting(msg)
+        return resultados
+
+    horizontes_validos = [int(h) for h in horizontes if entrenamiento_inicial + int(h) <= n]
+    for h in horizontes:
+        if int(h) not in horizontes_validos:
+            resultados[int(h)] = _resultado_sin_backtesting(
+                "No hay datos suficientes para el horizonte de backtesting solicitado."
+            )
+    if not horizontes_validos:
+        return resultados
+
+    predicciones_por_h: dict[int, list[dict[str, Any]]] = {h: [] for h in horizontes_validos}
+    errores_por_h: dict[int, list[str]] = {h: [] for h in horizontes_validos}
+
+    for corte in range(entrenamiento_inicial, n):
+        entrenamiento = serie.iloc[:corte]
+        t_train = entrenamiento["t"].to_numpy(dtype=float)
+        y_train = entrenamiento["Indice"].to_numpy(dtype=float)
+        escala_mase = calcular_escala_naive_insample(y_train)
+
+        try:
+            if modelo == "seleccion_automatica":
+                # El desempate por finitud de la prediccion depende del t
+                # objetivo, que varia con el horizonte: se conserva sin
+                # consolidar para no alterar la seleccion en ese modo.
+                modelo_ajustado = None
+            else:
+                modelo_ajustado = ajustar_modelo_interpretable(
+                    modelo, t_train, y_train, calcular_diagnostico_residuos=False
+                )
+        except Exception as exc:
+            for h in horizontes_validos:
+                if corte + h - 1 < n:
+                    errores_por_h[h].append(f"Fallo en corte {corte}: {exc}")
+            continue
+
+        for h in horizontes_validos:
+            idx_objetivo = corte + h - 1
+            if idx_objetivo >= n:
+                continue
+            prueba = serie.iloc[idx_objetivo]
+            t_objetivo = int(prueba["t"])
+            try:
+                if modelo_ajustado is None:
+                    ajuste_h = _seleccionar_en_corte(t_train, y_train, t_objetivo)
+                else:
+                    ajuste_h = modelo_ajustado
+                y_pred = float(ajuste_h["predict"]([t_objetivo])[0])
+            except Exception as exc:
+                errores_por_h[h].append(f"Fallo en corte {corte}: {exc}")
+                continue
+            y_real = float(prueba["Indice"])
+            error = y_real - y_pred
+            if np.isfinite(escala_mase) and abs(escala_mase) > EPS_NUMERICO:
+                error_escalado_abs = abs(error) / escala_mase
+            else:
+                error_escalado_abs = float("nan")
+            predicciones_por_h[h].append(
+                {
+                    "Periodo": str(prueba["Periodo"]),
+                    "t": t_objetivo,
+                    "Origen": str(serie.iloc[corte - 1]["Periodo"]),
+                    "Horizonte": int(h),
+                    "Observado": y_real,
+                    "Predicho": y_pred,
+                    "Error": error,
+                    "Error_abs": abs(error),
+                    "Error_pct": abs(error / y_real) * 100.0 if abs(y_real) > 1e-12 else float("nan"),
+                    "Modelo": ajuste_h.get("nombre_visible", ajuste_h.get("name", modelo)),
+                    "Modelo_codigo": ajuste_h.get("nombre", modelo),
+                    "Observaciones_entrenamiento": int(len(entrenamiento)),
+                    "Escala_naive_insample": escala_mase,
+                    "Error_escalado_abs": error_escalado_abs,
+                }
+            )
+
+    for h in horizontes_validos:
+        predicciones = predicciones_por_h[h]
+        if not predicciones:
+            resultados[h] = _resultado_sin_backtesting(
+                "No fue posible obtener predicciones de backtesting.", errores_por_h[h]
+            )
+            continue
+        pred_df = pd.DataFrame(predicciones)
+        metricas = _metricas_backtesting(
+            pred_df["Observado"].to_numpy(dtype=float),
+            pred_df["Predicho"].to_numpy(dtype=float),
+            serie["Indice"].iloc[:entrenamiento_inicial].to_numpy(dtype=float),
+            pred_df["Error"].to_numpy(dtype=float),
+            pred_df["Error_escalado_abs"].to_numpy(dtype=float),
+            pred_df["Escala_naive_insample"].to_numpy(dtype=float),
+            pred_df["Periodo"].tolist(),
+        )
+        metricas["iteraciones"] = int(len(pred_df))
+        metricas["horizonte"] = int(h)
+        resultados[h] = {
+            "ejecutado": True,
+            "metodo": "Walk-forward validation con ventana expansiva",
+            "entrenamiento_inicial": int(entrenamiento_inicial),
+            "horizonte": int(h),
+            "iteraciones": int(len(pred_df)),
+            "metricas": metricas,
+            "predicciones": pred_df,
+            "errores": errores_por_h[h],
+            "interpretacion": interpretar_backtesting(metricas),
+        }
+    return resultados
+
+
 def ejecutar_backtesting_comparativo(
     serie_df: pd.DataFrame,
     modelos: tuple[str, ...] = MODELOS_INTERPRETABLES,
@@ -151,20 +297,23 @@ def ejecutar_backtesting_comparativo(
     El primer origen se calcula **una sola vez** para todo el banco y se pasa
     explicito a cada ejecucion, de modo que los candidatos se comparan sobre
     exactamente los mismos origenes (P0-E). No hay origen por modelo.
+
+    Cada modelo se ajusta una sola vez por origen (`ejecutar_backtesting_multi_horizonte`)
+    y ese ajuste se reutiliza para todos los horizontes solicitados.
     """
     resultados: dict[str, dict[str, Any]] = {}
     catalogo = tuple(modelos)
-    for horizonte in horizontes:
-        for modelo in modelos:
-            clave = f"{modelo}_h{int(horizonte)}"
-            resultados[clave] = ejecutar_backtesting(
-                serie_df=serie_df,
-                anio_base=anio_base,
-                entrenamiento_inicial=entrenamiento_inicial,
-                horizonte=int(horizonte),
-                modelo=modelo,
-                modelos_catalogo=catalogo,
-            )
+    for modelo in modelos:
+        por_horizonte = ejecutar_backtesting_multi_horizonte(
+            serie_df=serie_df,
+            horizontes=tuple(int(h) for h in horizontes),
+            anio_base=anio_base,
+            entrenamiento_inicial=entrenamiento_inicial,
+            modelo=modelo,
+            modelos_catalogo=catalogo,
+        )
+        for horizonte in horizontes:
+            resultados[f"{modelo}_h{int(horizonte)}"] = por_horizonte[int(horizonte)]
     return resultados
 
 
@@ -332,7 +481,9 @@ def _seleccionar_en_corte(t_train: np.ndarray, y_train: np.ndarray, t_objetivo: 
     mejores: list[tuple[float, dict[str, Any]]] = []
     for nombre in MODELOS_ESTADISTICOS:
         try:
-            modelo = ajustar_modelo_interpretable(nombre, t_train, y_train)
+            modelo = ajustar_modelo_interpretable(
+                nombre, t_train, y_train, calcular_diagnostico_residuos=False
+            )
             pred = float(modelo["predict"]([t_objetivo])[0])
             error_ultimo = abs(float(y_train[-1]) - float(modelo["yhat"][-1]))
             aicc = float(modelo.get("metricas_ajuste", {}).get("aicc", 1e9))
