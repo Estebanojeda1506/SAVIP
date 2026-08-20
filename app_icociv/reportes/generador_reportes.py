@@ -209,9 +209,9 @@ def construir_dataframe_reproducibilidad(
                     "mape_horizonte": evaluacion.get("mape", ""),
                     "smape_horizonte": evaluacion.get("smape", ""),
                     "mase_horizonte": evaluacion.get("mase", ""),
-                    "sesgo_horizonte": evaluacion.get("sesgo_medio", ""),
+                    "sesgo_horizonte": evaluacion.get("sesgo", ""),
                     "estabilidad_error_horizonte": evaluacion.get("estabilidad_error", ""),
-                    "iteraciones_backtesting_horizonte": evaluacion.get("iteraciones", ""),
+                    "iteraciones_backtesting_horizonte": evaluacion.get("W", ""),
                     "horizonte": horizonte,
                     "factor_actualizacion": fila.get("factor_actualizacion"),
                     "variacion_acumulada": fila.get("variacion_acumulada_pct"),
@@ -257,9 +257,9 @@ def construir_dataframe_reproducibilidad(
                 "mape_horizonte": evaluacion.get("mape", ""),
                 "smape_horizonte": evaluacion.get("smape", ""),
                 "mase_horizonte": evaluacion.get("mase", ""),
-                "sesgo_horizonte": evaluacion.get("sesgo_medio", ""),
+                "sesgo_horizonte": evaluacion.get("sesgo", ""),
                 "estabilidad_error_horizonte": evaluacion.get("estabilidad_error", ""),
-                "iteraciones_backtesting_horizonte": evaluacion.get("iteraciones", ""),
+                "iteraciones_backtesting_horizonte": evaluacion.get("W", ""),
                 "horizonte": evaluacion.get("horizonte", ""),
                 "factor_actualizacion": "",
                 "variacion_acumulada": "",
@@ -854,7 +854,11 @@ def _lineas_ejemplo_dinamico(
     horizonte_info = resultado.get("horizonte_info") or {}
     horizonte_solicitado = resultado.get("horizonte_solicitado", horizonte_info.get("horizonte_solicitado", ""))
     horizonte_permitido = resultado.get("horizonte_permitido", horizonte_info.get("horizonte_permitido", ""))
-    horizonte_recomendado = horizonte_info.get("horizonte_maximo_recomendado") or (resultado.get("factibilidad") or {}).get("horizonte_maximo_sugerido", "")
+    # post-r1-metodologia-12-24, 19-08-2026 (Prompt 12). No existe ya un
+    # "maximo recomendado": el alcance operativo es fijo (H_OPERATIVO_MAX=24)
+    # y el modelo se selecciona una sola vez por RMSE OOS sobre 1..24.
+    alcance_maximo = horizonte_info.get("alcance_maximo_proyeccion", "")
+    rmse_seleccion = horizonte_info.get("rmse_seleccion_oos", "")
     no_recomendables = horizonte_info.get("horizontes_no_recomendables") or []
     evaluaciones = horizonte_info.get("evaluaciones") or []
     try:
@@ -883,8 +887,10 @@ def _lineas_ejemplo_dinamico(
             f"Como ejemplo de variación mensual, entre {primer_periodo} y {_periodo_iso(serie.loc[1, 'Periodo'])} la variación fue {_formatear_numero(variacion_mensual_1, 2)}%.",
             f"Benchmark naive para h=1: pronostica {_formatear_numero(naive_h1)} porque conserva el último índice observado.",
             f"Benchmark drift para h=1: usa una pendiente histórica promedio de {_formatear_numero(cambio_promedio)} puntos de índice por mes y pronostica {_formatear_numero(drift_h1)}.",
-            f"Horizonte solicitado: {horizonte_solicitado}. Horizonte finalmente permitido: {horizonte_permitido}. Horizonte máximo recomendado: {horizonte_recomendado}.",
-            f"Modelo o metodo aplicado para el horizonte permitido: {modelo}. Estado del horizonte: {estado}.",
+            f"Horizonte solicitado: {horizonte_solicitado}. Horizonte finalmente permitido: {horizonte_permitido}. "
+            f"Alcance máximo de proyección de SAVIP: {alcance_maximo} meses.",
+            f"Modelo seleccionado: {modelo}. RMSE OOS usado en la selección (1–24 meses): {rmse_seleccion}. "
+            f"Estado del horizonte: {estado}.",
         ]
     )
     if motivo:
@@ -933,17 +939,14 @@ def _lineas_factibilidad(factibilidad: dict[str, Any], resultado: dict[str, Any]
         f"Confianza metodológica: {factibilidad.get('nivel_confianza_metodologica', '')}",
         f"Horizonte solicitado: {resultado.get('horizonte_solicitado', '')}",
         f"Horizonte permitido: {resultado.get('horizonte_permitido', '')}",
-        f"Horizonte máximo recomendado: {horizonte_info.get('horizonte_maximo_recomendado') or 'No identificado'}",
-        f"Base del máximo recomendado: {horizonte_info.get('base_horizonte_maximo_recomendado', '')}",
-        f"Horizonte máximo con cautela: {horizonte_info.get('horizonte_maximo_con_cautela', '')}",
-        f"Horizonte máximo permitido como escenario: {horizonte_info.get('horizonte_maximo_permitido_como_escenario') or 'No identificado'}",
-        f"Base del máximo como escenario: {horizonte_info.get('base_horizonte_maximo_escenario', '')}",
-        f"Máximo horizonte evaluado: {horizonte_info.get('horizonte_maximo_evaluado', '')}",
-        f"Límite operativo de auditoria: {horizonte_info.get('horizonte_maximo_busqueda_configurado', '')}",
-        f"Primer horizonte no viable: {horizonte_info.get('primer_horizonte_no_viable') or 'No identificado en la grilla evaluada'}",
-        f"Razón de parada: {horizonte_info.get('razon_parada', 'No registrada')}",
-        f"Advertencia metodológica: {horizonte_info.get('advertencia_metodologica_horizontes') or 'No aplica'}",
-        horizonte_info.get("mensaje_no_recomendables") or f"Horizontes no recomendables: {horizonte_info.get('horizontes_no_recomendables', [])}",
+        # post-r1-metodologia-12-24, 19-08-2026 (Prompt 12). Metodologia
+        # N0=12/H=24: no hay clasificacion por horizonte; el alcance operativo
+        # es fijo y el modelo se selecciona una sola vez sobre 1..24.
+        f"Alcance máximo de proyección de SAVIP: {horizonte_info.get('alcance_maximo_proyeccion') or 'No identificado'} meses",
+        f"Primer origen del backtesting (N0): {horizonte_info.get('n0_backtesting') or 'No identificado'}",
+        f"Modelo seleccionado: {horizonte_info.get('modelo_seleccionado') or 'No identificado'}",
+        f"RMSE OOS usado en la selección (1–24 meses): {horizonte_info.get('rmse_seleccion_oos') or 'No identificado'}",
+        f"Segundo modelo: {horizonte_info.get('modelo_segundo') or 'No aplica'}",
         f"Explicación: {factibilidad.get('explicacion', resultado.get('explicacion', ''))}",
     ] + [f"{etiqueta}: {valor}" for etiqueta, valor in _filas_ajuste_calendario(resultado)]
     proyeccion_generada = bool(resultado.get("proyeccion_generada"))
@@ -1005,118 +1008,65 @@ def _lineas_modelos(resultado: dict[str, Any]) -> list[str]:
 
 
 def _lineas_horizontes(resultado: dict[str, Any]) -> list[str]:
+    # post-r1-metodologia-12-24, 19-08-2026 (Prompt 12 - sincronizar reportes).
+    # Bajo N0=12/H=24 rectangular no hay clasificacion por horizonte
+    # (permitido/tecnico/escenario/no_recomendable); la tabla es evidencia
+    # descriptiva del modelo YA seleccionado por RMSE OOS agregado 1..24.
     info = _analisis_horizontes_completo(resultado)
     lineas = [
         f"Horizonte solicitado: {info.get('horizonte_solicitado', resultado.get('horizonte_solicitado', ''))}",
-        f"Horizontes evaluados: {info.get('horizontes_evaluados', [])}",
-        (
-            "Horizonte máximo recomendado dentro de la grilla evaluada: "
-            if info.get("maximo_recomendado_es_limite_observado")
-            else "Horizonte máximo recomendado: "
-        )
-        + str(info.get("horizonte_maximo_recomendado") or "No identificado"),
-        f"Máximo horizonte evaluado: {info.get('horizonte_maximo_evaluado', '')}",
-        f"Límite operativo de auditoria: {info.get('horizonte_maximo_busqueda_configurado', '')}",
-        f"Horizonte máximo con cautela: {info.get('horizonte_maximo_con_cautela', '')}",
-        f"Horizonte máximo permitido como escenario: {info.get('horizonte_maximo_permitido_como_escenario') or 'No identificado'}",
-        f"Máximo admisible total: {info.get('horizonte_maximo_admisible', info.get('horizonte_maximo_permitido', ''))}",
-        f"Primer horizonte no viable: {info.get('primer_horizonte_no_viable') or 'No identificado en la grilla evaluada'}",
-        f"Razón de parada: {info.get('razon_parada', 'No registrada')}",
-        f"Advertencia metodológica: {info.get('advertencia_metodologica_horizontes') or 'No aplica'}",
-        info.get("mensaje_no_recomendables") or f"Horizontes no recomendables: {info.get('horizontes_no_recomendables', [])}",
-        f"Accion: {info.get('accion', '')}",
-        f"Uso recomendado: {info.get('tipo_uso_recomendado', '')}",
-        f"Mensaje: {info.get('mensaje_ui', info.get('mensaje', ''))}",
+        f"Alcance máximo de proyección de SAVIP: {info.get('alcance_maximo_proyeccion', '')} meses",
+        f"Primer origen del backtesting (N0): {info.get('n0_backtesting', '')}",
+        f"Modelo seleccionado: {info.get('modelo_seleccionado', '')}",
+        f"RMSE OOS usado en la selección (1–24 meses): {_formatear_numero(info.get('rmse_seleccion_oos'))}",
+        f"Segundo modelo: {info.get('modelo_segundo') or 'No aplica'}",
+        f"RMSE OOS del segundo modelo: {_formatear_numero(info.get('rmse_segundo_oos'))}",
+        f"Diferencia frente al segundo modelo (descriptiva, no prueba de significancia): "
+        f"{_formatear_numero(info.get('diferencia_porcentual_segundo'))}%",
     ]
     for item in info.get("tabla_horizontes", []):
         lineas.append(
-            f"{item.get('horizonte')} meses | {item.get('tipo_uso')} | "
-            f"modelo_evaluado={item.get('modelo_evaluado', item.get('modelo'))} | "
-            f"modelo_final={item.get('modelo_final_aplicado', resultado.get('model_name'))} | "
-            f"métricas={item.get('metricas_reportadas', 'modelo_ganador_por_horizonte')} | "
-            f"permitido={'Si' if item.get('permitido') else 'No'} | "
-            f"técnico={'Si' if item.get('permitido_para_proyeccion_tecnica') else 'No'} | "
-            f"escenario={'Si' if item.get('permitido_como_escenario') else 'No'} | "
-            f"RMSE={_formatear_numero(item.get('rmse'))} | MAE={_formatear_numero(item.get('mae'))} | "
-            f"MAPE={_formatear_numero(item.get('mape'))}% | "
-            f"sesgo={_formatear_numero(item.get('sesgo_medio'))} | "
-            f"errores_inusuales={item.get('errores_extremos_cantidad')}/{item.get('errores_extremos_evaluados')}"
-            f" ({_formatear_numero(item.get('errores_extremos'))}%, descriptivo) | "
-            # P0-C / C2: el ancho relativo de la banda deja de publicarse.
-            # Describe el tamano de un intervalo que el lector no recibe.
-            f"Estado={item.get('estado')} | Decisión={item.get('decision')} | "
-            f"Razón={item.get('razon_decision', item.get('motivo'))} | Recomendación={item.get('recomendacion')}"
+            f"h={item.get('horizonte')} meses | W_h={item.get('W')} | "
+            f"RMSE_h={_formatear_numero(item.get('rmse'))} | MAE_h={_formatear_numero(item.get('mae'))} | "
+            f"sMAPE_h={_formatear_numero(item.get('smape'))}% | MASE_h={_formatear_numero(item.get('mase'))} | "
+            f"sesgo_h={_formatear_numero(item.get('sesgo'))}"
         )
     return lineas
 
 
 def _lineas_determinacion_horizonte(resultado: dict[str, Any]) -> list[str]:
+    # post-r1-metodologia-12-24, 19-08-2026 (Prompt 12 - sincronizar reportes).
+    # Retirada la semantica triangular (maximo recomendado/admisible/como
+    # escenario, primer horizonte no viable, huecos). El alcance operativo de
+    # SAVIP es fijo (24 meses, decision institucional, no frontera
+    # estadistica) y el modelo se selecciona una unica vez sobre el dominio
+    # comun 1..24; el horizonte solicitado por el usuario solo determina que
+    # segmento de la trayectoria interna se presenta.
     info = _analisis_horizontes_completo(resultado)
     trazabilidad = info.get("trazabilidad") or {}
     lineas = [
-        # H-1A/H-4A, 18-08-2026 (reauditoria dirigida V-CODEX-R2 residual). Estas
-        # cuatro lineas citaban "intervalos" como fundamento del horizonte
-        # maximo -retirado como criterio, P0-C- y "escenario de alta
-        # incertidumbre" como estado vigente -el productor real solo entrega
-        # tecnica_alta, tecnica_cautela o no_viable desde el 08-08-2026-.
-        "18 meses es una opción operativa por defecto de la interfaz, no un límite estadístico fijo.",
-        "El horizonte máximo se calcula dinámicamente con backtesting y evidencia fuera de muestra (W); sesgo, errores extremos, estabilidad y comparación contra benchmarks se publican como información complementaria, sin decidir el horizonte.",
-        "El máximo recomendado corresponde al último horizonte con evidencia fuera de muestra suficiente para proyección técnica.",
-        "Los horizontes superiores pueden quedar como proyección técnica con advertencias registradas o como no recomendables.",
-        info.get("mensaje_informe", info.get("mensaje", "")),
+        (
+            f"Alcance máximo de proyección de SAVIP: {info.get('alcance_maximo_proyeccion', '')} meses. "
+            "Este límite corresponde al alcance operativo definido para la herramienta y no constituye "
+            "una frontera estadística universal de predictibilidad."
+        ),
+        (
+            "SAVIP compara los modelos candidatos mediante validación temporal fuera de muestra sobre un "
+            "dominio común de 1 a 24 meses, usando los mismos orígenes históricos para todos los "
+            "horizontes y modelos. El modelo seleccionado es el de menor RMSE OOS sobre esa matriz común."
+        ),
         f"Horizonte solicitado: {info.get('horizonte_solicitado', resultado.get('horizonte_solicitado', ''))} meses.",
-        f"Horizontes evaluados mes a mes: {info.get('horizontes_evaluados', [])}.",
-        (
-            "Horizonte máximo recomendado dentro de la grilla evaluada: "
-            if info.get("maximo_recomendado_es_limite_observado")
-            else "Horizonte máximo recomendado: "
-        )
-        + (
-            f"{info.get('horizonte_maximo_recomendado')} meses."
-            if info.get("horizonte_maximo_recomendado")
-            else "No identificado."
-        ),
-        f"Máximo horizonte evaluado: {info.get('horizonte_maximo_evaluado', '')} meses.",
-        f"Límite operativo de auditoria: {info.get('horizonte_maximo_busqueda_configurado', '')} meses.",
-        f"Horizonte máximo con cautela: {info.get('horizonte_maximo_con_cautela', '')} meses.",
-        (
-            f"Horizonte máximo permitido como escenario: "
-            f"{info.get('horizonte_maximo_permitido_como_escenario')} meses."
-            if info.get("horizonte_maximo_permitido_como_escenario")
-            else "Horizonte máximo permitido como escenario: No identificado."
-        ),
-        f"Primer horizonte no viable: {info.get('primer_horizonte_no_viable') or 'No identificado en la grilla evaluada'}.",
-        f"Razón de parada: {info.get('razon_parada', 'No registrada')}.",
-        f"Advertencia metodológica: {info.get('advertencia_metodologica_horizontes') or 'No aplica'}.",
-        f"Horizonte máximo evaluable por datos: {info.get('horizonte_maximo_evaluable_por_datos', '')}.",
-        f"Horizonte solicitado cubierto por la evaluación: {'Si' if info.get('horizonte_solicitado_cubierto') else 'No'}.",
+        f"Primer origen del backtesting (N0): {info.get('n0_backtesting', '')} observaciones.",
+        f"Modelo seleccionado: {info.get('modelo_seleccionado', '')}.",
+        f"RMSE OOS usado en la selección (1–24 meses): {_formatear_numero(info.get('rmse_seleccion_oos'))}.",
+        f"Segundo modelo: {info.get('modelo_segundo') or 'No aplica'}.",
+        f"RMSE OOS del segundo modelo: {_formatear_numero(info.get('rmse_segundo_oos'))}.",
         (
             "Consistencia metodológica: "
             f"firma de serie={trazabilidad.get('firma_serie_sha256', 'No disponible')}; "
             f"versión de criterios={trazabilidad.get('version_criterios', 'No disponible')}."
         ),
-        info.get("mensaje_no_recomendables") or f"Horizontes no recomendables: {info.get('horizontes_no_recomendables', [])}.",
     ]
-    if (
-        info.get("tipo_parada") == "evidencia_oos_insuficiente"
-        and info.get("horizonte_maximo_evaluado")
-    ):
-        lineas.append(
-            f"La evaluación alcanzo h={info.get('horizonte_maximo_evaluado')}, pero se detuvo "
-            "por falta de evidencia fuera de muestra suficiente. Este valor no debe interpretarse "
-            "como horizonte máximo recomendado."
-        )
-    # H-4, 18-08-2026 (reauditoria dirigida V-CODEX-R2 residual). Se retira la
-    # rama que comparaba `permitido_como_escenario and not
-    # permitido_para_proyeccion_tecnica`: en el evaluador vigente ambos campos
-    # son siempre iguales para un mismo horizonte (`_clasificar_evidencia_
-    # horizonte`), de modo que esa condicion nunca se cumplia y el texto
-    # "escenario de alta incertidumbre" nunca llegaba a publicarse por esta via.
-    for item in info.get("tabla_horizontes", []):
-        if item.get("no_recomendable"):
-            lineas.append(
-                f"h={item.get('horizonte')} no recomendable: {item.get('razon_decision', item.get('motivo', ''))}"
-            )
     return [linea for linea in lineas if str(linea).strip()]
 
 

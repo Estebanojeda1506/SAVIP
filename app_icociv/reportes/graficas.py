@@ -206,15 +206,11 @@ def grafica_errores_horizonte(resultado: dict[str, Any]) -> bytes | None:
 
     figura, eje = _figura(alto=3.4)
     eje.plot(horizontes, errores, color=PALETA["marca"], linewidth=1.9, marker="o", markersize=4)
-    maximo = info.get("horizonte_maximo_recomendado")
-    if _finito(maximo):
-        eje.axvline(float(maximo), color=PALETA["aviso"], linewidth=1.2, linestyle="--")
-        eje.annotate(
-            f"Máximo recomendado: {int(float(maximo))} meses",
-            xy=(float(maximo), float(np.nanmax(errores))), xytext=(5, -8), textcoords="offset points",
-            fontsize=7.5, color=PALETA["aviso"],
-        )
-    _titulo(eje, "Error de validación temporal por horizonte")
+    # post-r1-metodologia-12-24, 19-08-2026 (Prompt 12). Retirada la linea
+    # vertical de "maximo recomendado": esa clasificacion por horizonte ya no
+    # existe bajo N0=12/H=24 (alcance operativo fijo de 24 meses, sin
+    # gradiente de admisibilidad entre horizontes).
+    _titulo(eje, "RMSE OOS por horizonte (dominio 1–24 meses)")
     eje.set_xlabel("Horizonte (meses)", fontsize=8.5, color=PALETA["texto_secundario"])
     eje.set_ylabel("RMSE", fontsize=8.5, color=PALETA["texto_secundario"])
     return _exportar(figura)

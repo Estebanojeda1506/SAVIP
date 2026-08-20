@@ -1217,6 +1217,24 @@ def _ejecutar_proyeccion_base(
         f"{H_OPERATIVO_MAX} meses corresponde al alcance operativo definido para la "
         "herramienta y no constituye una frontera estadística universal de predictibilidad."
     )
+    # post-r1-metodologia-12-24, 19-08-2026 (Prompt 12 - sincronizar reportes).
+    # Tabla por horizonte h=1..24 del modelo SELECCIONADO, sobre el mismo
+    # rectangulo que decidio la seleccion (NO decide nada por si misma; es
+    # evidencia historica publicada para trazabilidad de reportes/graficas).
+    # W_h = w_estrella para todos los h del modelo ganador, por construccion
+    # del rectangulo completo.
+    tabla_horizontes_24 = []
+    for h in range(1, H_OPERATIVO_MAX + 1):
+        m = _metricas_horizonte_rectangular(matriz, modelo_codigo, h)
+        tabla_horizontes_24.append({
+            "horizonte": h,
+            "W": m["W"],
+            "rmse": m["RMSE"],
+            "mae": m["MAE"],
+            "smape": m["sMAPE"],
+            "mase": m["MASE"],
+            "sesgo": m["sesgo"],
+        })
     horizonte_info = {
         "alcance_maximo_proyeccion": H_OPERATIVO_MAX,
         "mensaje_alcance": mensaje_alcance,
@@ -1240,6 +1258,10 @@ def _ejecutar_proyeccion_base(
         "diferencia_porcentual_segundo": seleccion["diferencia_porcentual"],
         "razones": [],
         "salvaguarda_benchmark": {"intentada": False, "activada": False},
+        # Tabla de evidencia OOS por horizonte (h, W_h, RMSE_h, MAE_h, sMAPE_h,
+        # MASE_h, sesgo_h) del modelo seleccionado, h=1..24. Informativa: no
+        # decide nada, no reemplaza `rmse_seleccion_oos`.
+        "tabla_horizontes": tabla_horizontes_24,
     }
     factibilidad["horizonte_maximo_sugerido"] = H_OPERATIVO_MAX
     factibilidad["estado_proyeccion"] = {
@@ -1573,7 +1595,17 @@ def _estructurar_resultado_horizontes(resultado: dict[str, Any], origen_horizont
     tabla_horizontes.sort(key=lambda item: int(item.get("horizonte", 0) or 0))
 
     generado = bool(resultado.get("proyeccion_generada")) and int(resultado.get("horizonte_permitido") or 0) == solicitado
-    tecnico = bool(evaluacion_solicitada.get("permitido_para_proyeccion_tecnica"))
+    # post-r1-metodologia-12-24, 19-08-2026 (Prompt 12 - sincronizar reportes).
+    # Bajo N0=12/H=24 rectangular ya no existe clasificacion por horizonte
+    # (`evaluaciones`/`permitido_para_proyeccion_tecnica`): W* es identico
+    # para 1..24, de modo que solo hay una puerta binaria global (historia
+    # suficiente + seleccion exitosa). Leer `evaluacion_solicitada` -que
+    # siempre esta vacia porque `info["evaluaciones"]` ya no se puebla-
+    # forzaba `tecnico=False` incondicionalmente y `estado="no_admisible"`
+    # incluso con `proyeccion_generada=True`, contradiciendo el resultado
+    # publico real (hallazgo de este prompt). `tecnico` pasa a ser
+    # equivalente a `generado`.
+    tecnico = generado
 
     # Decision autorizada sobre H-05: una cobertura no verificable o por debajo
     # del umbral de advertencia degrada el horizonte a escenario. No se toca el

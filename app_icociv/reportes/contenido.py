@@ -77,7 +77,8 @@ LIMITACIONES_FIJAS = (
     "Esta versión no publica intervalo de predicción: el método no está sustentado y la "
     "incertidumbre del pronóstico no viene acotada.",
     "Una serie volátil exige mayor precaución al leer la trayectoria central.",
-    "Los horizontes clasificados como escenario no son la proyección técnica principal.",
+    "El alcance máximo de proyección de SAVIP es de 24 meses; no constituye una frontera estadística "
+    "universal de predictibilidad.",
     "El usuario debe revisar las condiciones contractuales aplicables antes de usar el resultado.",
 )
 
@@ -207,7 +208,7 @@ def resumen_ejecutivo(datos: DatosProyeccion) -> list[str]:
     info = _horizontes(resultado)
     serie = _nombre_serie(datos)
     horizonte = solicitado.get("horizonte_solicitado")
-    maximo = info.get("horizonte_maximo_recomendado")
+    alcance = info.get("alcance_maximo_proyeccion")
     generado = bool(solicitado.get("proyeccion_generada"))
     periodo_final, indice_final = _ultimo_observado(datos.serie_df)
 
@@ -231,11 +232,32 @@ def resumen_ejecutivo(datos: DatosProyeccion) -> list[str]:
         )
         return parrafos
 
+    # post-r1-metodologia-12-24, 19-08-2026 (Prompt 12 - sincronizar reportes).
+    # Metodologia vigente: SAVIP compara los candidatos mediante validacion
+    # temporal fuera de muestra sobre un dominio comun de 1 a 24 meses, con
+    # los mismos origenes historicos para todos los horizontes y modelos. El
+    # modelo seleccionado es el de menor RMSE OOS sobre esa matriz comun; no
+    # se afirma que sea "el mejor" en sentido absoluto ni estadisticamente
+    # superior (Prompt 09: varias competencias resultaron estrechas, sin
+    # prueba formal de significancia).
     modelo = texto_o(solicitado.get("modelo_aplicado"), "el modelo seleccionado")
+    rmse_seleccion = resultado.get("rmse_seleccion_oos")
     parrafos.append(
-        f"El modelo {modelo} presentó el mejor desempeño global en validación temporal walk-forward "
-        f"y es el que se aplica a toda la trayectoria proyectada."
+        f"El modelo seleccionado es {modelo}: el candidato con menor RMSE fuera de muestra bajo el "
+        "criterio común de evaluación (dominio 1–24 meses, mismos orígenes históricos para todos los "
+        "modelos)"
+        + (f", con RMSE de selección {formato_indice(rmse_seleccion)}." if es_numero(rmse_seleccion) else ".")
+        + " Se reajusta con toda la serie histórica y genera una trayectoria interna de 24 meses; el "
+        "horizonte solicitado por el usuario no cambia el modelo seleccionado."
     )
+    modelo_segundo = resultado.get("modelo_segundo")
+    diferencia_pct = resultado.get("diferencia_porcentual_segundo")
+    if modelo_segundo and es_numero(diferencia_pct):
+        parrafos.append(
+            f"La diferencia frente al segundo modelo ({texto_o(modelo_segundo)}) bajo el mismo criterio OOS "
+            f"fue de {formato_porcentaje(diferencia_pct)}. Este valor se presenta con fines descriptivos y no "
+            "corresponde a una prueba de significancia estadística."
+        )
 
     proyecciones = resultado.get("proyecciones")
     if isinstance(proyecciones, pd.DataFrame) and not proyecciones.empty:
@@ -253,34 +275,17 @@ def resumen_ejecutivo(datos: DatosProyeccion) -> list[str]:
             "puntual y no viene acompañado de una banda de incertidumbre defendible."
         )
 
-    # H-4B, 18-08-2026 (reauditoria dirigida V-CODEX-R2 residual). Las tres
-    # ramas citaban "escenario [de alta incertidumbre]" como si fuera un
-    # estado que el productor real puede entregar. Los unicos estados que
-    # _estructurar_resultado_horizontes puede fijar son "proyeccion_tecnica" y
-    # "no_admisible" desde el 08-08-2026; el estado intermedio nunca se
-    # produce. Reescrito sin el rotulo, conservando el hecho real: los meses
-    # posteriores al maximo recomendado tienen menos evidencia fuera de
-    # muestra y su incertidumbre no viene acotada.
-    if es_numero(maximo) and es_numero(horizonte):
-        maximo_int, horizonte_int = int(maximo), int(horizonte)
-        if maximo_int and horizonte_int > maximo_int:
-            parrafos.append(
-                f"SAVIP recomienda utilizar la proyección hasta {formato_entero(maximo_int)} meses como referencia "
-                f"técnica. Los {formato_entero(horizonte_int - maximo_int)} meses posteriores cuentan con menos "
-                "evidencia fuera de muestra y deben leerse con mayor cautela; esa incertidumbre no viene "
-                "acotada porque esta versión no publica intervalo de predicción."
-            )
-        elif maximo_int:
-            parrafos.append(
-                f"El horizonte solicitado está dentro del máximo recomendado por la evidencia "
-                f"({formato_entero(maximo_int)} meses), de modo que toda la trayectoria se comunica como "
-                "proyección técnica."
-            )
-        else:
-            parrafos.append(
-                "La evidencia disponible no permitió identificar un horizonte máximo recomendado; "
-                "la trayectoria completa debe leerse con cautela."
-            )
+    # post-r1-metodologia-12-24, 19-08-2026 (Prompt 12 - sincronizar reportes).
+    # No existe ya un "maximo recomendado" derivado de una rejilla triangular
+    # ni una clasificacion "escenario": bajo N0=12/H=24 rectangular el
+    # horizonte solicitado siempre esta dentro del alcance operativo (validado
+    # en la entrada) y usa la misma evidencia OOS que decidio el modelo.
+    if es_numero(alcance):
+        parrafos.append(
+            f"Alcance máximo de proyección de SAVIP: {formato_entero(alcance)} meses. Este límite corresponde "
+            "al alcance operativo definido para la herramienta y no constituye una frontera estadística "
+            "universal de predictibilidad."
+        )
 
     advertencias = _advertencias(resultado, maximo=3)
     if advertencias:
@@ -337,15 +342,10 @@ def interpretacion(datos: DatosProyeccion) -> list[str]:
             "leerse con criterio profesional y junto con las advertencias del informe."
         )
 
-    info = _horizontes(resultado)
-    maximo = info.get("horizonte_maximo_recomendado")
-    horizonte = solicitado.get("horizonte_solicitado")
-    if es_numero(maximo) and es_numero(horizonte) and int(horizonte) > int(maximo) > 0:
-        parrafos.append(
-            f"Existe una diferencia entre lo solicitado ({formato_entero(horizonte)} meses) y lo respaldado por la "
-            f"evidencia ({formato_entero(maximo)} meses). Los meses excedentes siguen apareciendo en la tabla, pero "
-            "clasificados como escenario: sirven para dimensionar un rango posible, no para fijar un valor de referencia."
-        )
+    # post-r1-metodologia-12-24, 19-08-2026 (Prompt 12). Retirado el parrafo
+    # "escenario": bajo N0=12/H=24 no existe clasificacion por horizonte ni un
+    # "maximo recomendado" que el horizonte solicitado pueda superar (el
+    # limite de entrada ya es H_OPERATIVO_MAX=24).
 
     calendario = resultado.get("ajuste_calendario") or {}
     if calendario.get("ajuste_calendario_aplicado"):
@@ -448,7 +448,9 @@ def _seccion_ficha(datos: DatosProyeccion) -> Seccion:
         ("Serie analizada", _nombre_serie(datos)),
         ("Último índice observado", f"{formato_indice(indice_final)} ({periodo_largo(periodo_final)})"),
         ("Horizonte solicitado", f"{formato_entero(solicitado.get('horizonte_solicitado'))} meses"),
-        ("Máximo recomendado", f"{formato_entero(info.get('horizonte_maximo_recomendado'))} meses" if es_numero(info.get("horizonte_maximo_recomendado")) and int(info.get("horizonte_maximo_recomendado") or 0) else "No identificado"),
+        ("Alcance máximo de proyección de SAVIP", f"{formato_entero(info.get('alcance_maximo_proyeccion'))} meses" if es_numero(info.get("alcance_maximo_proyeccion")) else "No identificado"),
+        ("Modelo seleccionado", texto_o(info.get("modelo_seleccionado"), "No aplica")),
+        ("RMSE OOS de selección (1–24 meses)", formato_indice(info.get("rmse_seleccion_oos")) if es_numero(info.get("rmse_seleccion_oos")) else "No aplica"),
         ("Estado del horizonte", ESTADOS_VISIBLES.get(str(solicitado.get("estado")), texto_o(solicitado.get("estado"), "No disponible"))),
         ("Periodo proyectado final", periodo_largo(solicitado.get("periodo_proyectado")) if generado else "No aplica"),
         ("Patrón de cambio de año", texto_o(calendario.get("estado_calendario_visible"), "No evaluado")),
@@ -638,52 +640,39 @@ def _seccion_tabla_proyeccion(datos: DatosProyeccion) -> Seccion:
         ]
         return Seccion("tabla_proyeccion", "Proyección mes a mes", bloques)
 
-    clasificaciones = _clasificacion_por_horizonte(resultado)
+    # post-r1-metodologia-12-24, 19-08-2026 (Prompt 12). Retirada la columna
+    # "Clasificación": bajo N0=12/H=24 no existe clasificacion por horizonte
+    # (tecnica/escenario/no viable); todos los meses de la trayectoria
+    # provienen del mismo modelo unico, reajustado una sola vez.
     filas: list[list[str]] = []
-    for paso, (_, fila) in enumerate(proyecciones.iterrows(), start=1):
-        clasificacion = clasificaciones.get(paso, "No clasificado")
-        observacion = _observacion_paso(fila, clasificacion)
+    for _, fila in proyecciones.iterrows():
         # P0-C RUTA C2: el intervalo se retira de las salidas. Ninguno de los
         # metodos de intervalo auditados resulto adoptable y REQ 20 prohibe la
         # combinacion que se venia publicando. El calculo interno se conserva
         # como diagnostico; lo que desaparece es su PUBLICACION, y no se
         # sustituye por ninguna otra banda.
-        #
-        # 15-08-2026: se retiran ademas las dos COLUMNAS. Antes quedaban con la
-        # celda «no publicado» bajo los encabezados «Limite inferior 95 %» y
-        # «Limite superior 95 %»: dos columnas enteras que seguian anunciando la
-        # banda y que el lector interpreta como un dato que falta en este caso,
-        # no como una decision metodologica. Esta se declara en la seccion
-        # «Incertidumbre del pronostico» y en los bloqueos visibles.
         filas.append([
             periodo_largo(fila.get("periodo")),
             formato_indice(fila.get("indice_proyectado")),
-            clasificacion,
-            observacion,
+            _observacion_paso(fila),
         ])
     tabla = Tabla(
-        encabezados=["Periodo", "Índice proyectado", "Clasificación", "Observación"],
+        encabezados=["Periodo", "Índice proyectado", "Observación"],
         filas=filas,
         titulo="Proyección mensual",
-        nota="La clasificación proviene de la evaluación por horizonte del backtesting walk-forward. Esta versión no publica intervalo de predicción.",
+        nota="Trayectoria del modelo seleccionado, reajustado con toda la serie histórica. Esta versión no publica intervalo de predicción.",
         fuente="Elaboración de SAVIP sobre índices oficiales del DANE.",
         columnas_numericas=(1,),
-        anchos=(3.4, 3.4, 4.0, 5.0),
+        anchos=(3.4, 3.4, 6.0),
     )
     return Seccion("tabla_proyeccion", "Proyección mes a mes", [tabla])
 
 
-def _observacion_paso(fila: pd.Series, clasificacion: str) -> str:
+def _observacion_paso(fila: pd.Series) -> str:
     variacion = fila.get("variacion_acumulada_pct")
-    if clasificacion.startswith("Escenario"):
-        base = "Escenario; incertidumbre no acotada"
-    elif clasificacion.startswith("No"):
-        base = "Fuera de la evidencia disponible"
-    else:
-        base = "Referencia técnica"
     if es_numero(variacion):
-        return f"{base}. Variación acumulada {formato_porcentaje(variacion)}"
-    return base
+        return f"Variación acumulada {formato_porcentaje(variacion)}"
+    return ""
 
 
 def _seccion_preparacion(datos: DatosProyeccion) -> Seccion:
@@ -842,7 +831,7 @@ def _seccion_backtesting(datos: DatosProyeccion, config: ConfiguracionInforme) -
                 ["Método", texto_o(backtesting.get("metodo"), "Walk-forward")],
                 ["Entrenamiento inicial", formato_entero(backtesting.get("entrenamiento_inicial"))],
                 ["Orígenes evaluados", formato_entero(backtesting.get("iteraciones"))],
-                ["Horizontes evaluados", unir([str(h) for h in (_horizontes(datos.resultado).get("horizontes_evaluados") or [])][:20], ", ") or "No registrados"],
+                ["Horizontes evaluados", f"1–{formato_entero(_horizontes(datos.resultado).get('alcance_maximo_proyeccion'))} (dominio común rectangular)"],
             ],
             titulo="Configuración del backtesting",
         ),
@@ -850,7 +839,7 @@ def _seccion_backtesting(datos: DatosProyeccion, config: ConfiguracionInforme) -
     if config.incluye_grafica("errores_horizonte"):
         imagen = graficas.grafica_errores_horizonte(datos.resultado)
         if imagen is not None:
-            bloques.append(Imagen(imagen, pie="El error crece con el horizonte; la línea vertical marca el máximo recomendado."))
+            bloques.append(Imagen(imagen, pie="RMSE fuera de muestra del modelo seleccionado por horizonte, sobre el rectángulo común 1–24 meses."))
     if config.incluye_grafica("comparacion_modelos"):
         imagen = graficas.grafica_comparacion_modelos(datos.resultado)
         if imagen is not None:
@@ -1098,44 +1087,60 @@ def _seccion_calendario(datos: DatosProyeccion, config: ConfiguracionInforme) ->
 
 
 def _seccion_horizonte(datos: DatosProyeccion) -> Seccion:
+    # post-r1-metodologia-12-24, 19-08-2026 (Prompt 12 - sincronizar reportes).
+    # Bajo N0=12/H=24 rectangular no hay clasificacion por horizonte
+    # (tecnica/escenario/no viable): la tabla de evidencia h=1..24 es
+    # descriptiva del modelo YA SELECCIONADO (RMSE_h, MAE_h, sMAPE_h, MASE_h,
+    # sesgo_h, W_h), y no decide nada. `rmse_seleccion_oos` -agregado 1..24- es
+    # la unica metrica decisiva; se distingue explicitamente de RMSE_h.
     info = _horizontes(datos.resultado)
     evaluaciones = info.get("tabla_horizontes") or []
-    bloques: list[Any] = []
-    mensaje = str(info.get("mensaje_informe") or info.get("mensaje") or "").strip()
-    if mensaje:
-        bloques.append(Parrafo(mensaje))
+    bloques: list[Any] = [Parrafo(
+        "SAVIP compara los modelos candidatos mediante validación temporal fuera de muestra sobre un "
+        "dominio común de 1 a 24 meses, usando los mismos orígenes históricos para todos los horizontes "
+        "y modelos. El modelo seleccionado es el de menor RMSE OOS sobre esa matriz común; luego se "
+        "reajusta con toda la serie y se genera una trayectoria de 24 meses, de la cual se presenta el "
+        "valor correspondiente al horizonte solicitado."
+    )]
     bloques.append(Tabla(
-        encabezados=["Concepto", "Meses"],
+        encabezados=["Concepto", "Valor"],
         filas=[
-            ["Horizonte solicitado", formato_entero(info.get("horizonte_solicitado"))],
-            ["Máximo recomendado como proyección técnica", formato_entero(info.get("horizonte_maximo_recomendado"))],
-            ["Máximo admisible incluyendo escenario", formato_entero(info.get("horizonte_maximo_admisible"))],
-            ["Máximo efectivamente evaluado", formato_entero(info.get("horizonte_maximo_evaluado"))],
+            ["Horizonte solicitado", f"{formato_entero(info.get('horizonte_solicitado'))} meses"],
+            ["Alcance máximo de proyección de SAVIP", f"{formato_entero(info.get('alcance_maximo_proyeccion'))} meses"],
+            ["Primer origen del backtesting (N0)", f"{formato_entero(info.get('n0_backtesting'))} observaciones"],
+            ["Modelo seleccionado", texto_o(info.get("modelo_seleccionado"))],
+            ["RMSE OOS usado en la selección (1–24 meses)", formato_indice(info.get("rmse_seleccion_oos"))],
+            ["Segundo modelo", texto_o(info.get("modelo_segundo"), "No aplica")],
+            [
+                "Diferencia frente al segundo modelo",
+                formato_porcentaje(info.get("diferencia_porcentual_segundo"))
+                if es_numero(info.get("diferencia_porcentual_segundo")) else "No aplica",
+            ],
         ],
-        titulo="Horizontes determinados por la evidencia",
-        columnas_numericas=(1,),
+        titulo="Metodología de selección (N0=12, H=24)",
+        columnas_numericas=(),
     ))
     if evaluaciones:
         bloques.append(Tabla(
-            encabezados=["h", "RMSE", "MAE", "MASE", "Orígenes", "Clasificación"],
+            encabezados=["h", "W_h", "RMSE_h", "MAE_h", "sMAPE_h", "MASE_h", "Sesgo_h"],
             filas=[[
                 formato_entero(item.get("horizonte")),
+                formato_entero(item.get("W")),
                 formato_indice(item.get("rmse")),
                 formato_indice(item.get("mae")),
-                formato_indice(item.get("mase")),
-                formato_entero(item.get("iteraciones")),
-                CLASIFICACIONES_VISIBLES.get(str(item.get("clasificacion")), texto_o(item.get("estado"), "")),
+                formato_porcentaje(item.get("smape")) if es_numero(item.get("smape")) else "No disponible",
+                formato_indice(item.get("mase")) if es_numero(item.get("mase")) else "No disponible",
+                formato_indice(item.get("sesgo")) if es_numero(item.get("sesgo")) else "No disponible",
             ] for item in evaluaciones if isinstance(item, dict)],
-            titulo="Evaluación por horizonte",
-            nota="Cada fila corresponde a un horizonte evaluado de forma independiente en el backtesting.",
-            columnas_numericas=(0, 1, 2, 3, 4),
-            anchos=(1.4, 2.4, 2.4, 2.4, 2.0, 5.8),
+            titulo="Evidencia fuera de muestra por horizonte (1–24 meses)",
+            nota=(
+                "Métricas descriptivas del modelo seleccionado en cada horizonte; no deciden la selección "
+                "del modelo, que ya se resolvió con el RMSE OOS agregado sobre el dominio 1–24 meses."
+            ),
+            columnas_numericas=(0, 1, 2, 3, 4, 5, 6),
+            anchos=(1.2, 1.6, 2.0, 2.0, 2.0, 2.0, 2.0),
         ))
-        motivos = _motivos_por_clasificacion(datos.resultado, evaluaciones)
-        if motivos:
-            bloques.append(Parrafo("Por qué cada horizonte quedó donde quedó:", enfasis=True))
-            bloques.append(Vinetas(motivos))
-    return Seccion("horizonte", "Horizonte estadístico admisible", bloques)
+    return Seccion("horizonte", "Metodología y evidencia por horizonte", bloques)
 
 
 def _motivos_por_clasificacion(resultado: dict[str, Any], evaluaciones: list[Any]) -> list[str]:

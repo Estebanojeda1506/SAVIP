@@ -188,10 +188,13 @@ def test_j_no_existe_tolerancia_smape_productiva():
     firma = inspect.signature(sp.ejecutar_proyeccion)
     assert "tolerancia_smape" not in firma.parameters
 
-    # Grep amplio: ningun archivo de la interfaz debe mencionar la tolerancia
-    # (checkbox/spinbox) que existia en la rama experimental descartada.
+    # Grep amplio: ningun archivo PRODUCTIVO de la interfaz debe mencionar la
+    # tolerancia (checkbox/spinbox) que existia en la rama experimental
+    # descartada. Se excluye este propio archivo de prueba, que menciona la
+    # frase dentro del patron de busqueda (coincidencia consigo mismo).
     resultado = subprocess.run(
-        ["git", "-C", str(ROOT), "grep", "-l", "-i", "tolerancia operativa de error"],
+        ["git", "-C", str(ROOT), "grep", "-l", "-i", "tolerancia operativa de error",
+         "--", ":!tests/test_metodologia_n0_12_h24.py"],
         capture_output=True, text=True,
     )
     assert resultado.stdout.strip() == "", f"referencias residuales a la tolerancia: {resultado.stdout}"
