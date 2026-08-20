@@ -41,7 +41,7 @@ from PySide6.QtWidgets import (
 from app_icociv.interfaz.controladores.controlador_principal import ControladorPrincipal
 from app_icociv.interfaz.estilos.constantes_visuales import ALTURA_CONTROL, ANCHO_BOTON_INCREMENTO
 from app_icociv.interfaz.widgets.modelo_tabla import ModeloTablaPandas
-from app_icociv.proyeccion.servicio_proyeccion import resolver_fila_seleccionada
+from app_icociv.proyeccion.servicio_proyeccion import H_OPERATIVO_MAX, resolver_fila_seleccionada
 from app_icociv.servicios.empalme_iccp_icociv import calcular_empalme_iccp_icociv, normalizar_periodo_empalme, series_iccp_por_tipo
 from app_icociv.utilidades.nomenclatura_icociv import nombre_nivel, texto_checkbox
 
@@ -808,6 +808,19 @@ class WidgetEmpalmeICCPICOCIV(QWidget):
             raise ValueError(
                 "La fecha final solicitada supera el último periodo disponible en el archivo ICOCIV, "
                 "pero el módulo de proyección no está conectado."
+            )
+
+        # Misma semantica de horizonte que el modulo Proyecciones: meses entre
+        # el ultimo periodo real y la fecha objetivo, acotados a H_OPERATIVO_MAX.
+        # No se ejecuta ninguna proyeccion si se excede: se avisa y se conservan
+        # los datos ya ingresados en el formulario (el ValueError no los toca).
+        horizonte_meses = _periodo_orden(periodo_final) - _periodo_orden(ultimo_real)
+        if horizonte_meses > H_OPERATIVO_MAX:
+            raise ValueError(
+                f"La fecha final solicitada requiere proyectar {horizonte_meses} meses más allá del "
+                f"último periodo ICOCIV disponible ({_periodo_visible(ultimo_real)}). "
+                f"SAVIP admite un horizonte operativo máximo de {H_OPERATIVO_MAX} meses. "
+                "Ajuste la fecha final o cargue un anexo ICOCIV más reciente."
             )
 
         QMessageBox.information(

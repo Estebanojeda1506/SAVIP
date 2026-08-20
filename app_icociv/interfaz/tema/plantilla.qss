@@ -668,7 +668,7 @@ QTableCornerButton::section {{
 
 /* ============ TEXTO ENRIQUECIDO ============ */
 
-QTextEdit, QTextBrowser {{
+QTextEdit, QTextBrowser, QPlainTextEdit {{
     background: {campo};
     color: {texto};
     border: {grosor_borde}px solid {borde};
@@ -685,7 +685,7 @@ QTextEdit#visor_resultados, QTextBrowser#visor_resultados {{
     font-family: {familia_interfaz};
 }}
 
-QTextEdit:disabled, QTextBrowser:disabled {{
+QTextEdit:disabled, QTextBrowser:disabled, QPlainTextEdit:disabled {{
     background: {deshabilitado};
     color: {texto_deshabilitado};
 }}

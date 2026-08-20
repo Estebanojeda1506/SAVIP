@@ -1323,9 +1323,18 @@ class VentanaPrincipal(QMainWindow):
     def _ejecutar_proyeccion_para_empalme(self, seleccion: dict[str, Any], anio: int, mes: int) -> dict[str, Any]:
         self.spin_anio.setValue(int(anio))
         self.spin_mes.setValue(int(mes))
-        resultado = self.controlador.ejecutar_analisis(seleccion, int(anio), int(mes), "manual")
-        self._proyeccion_lista(resultado, registrar=False)
-        return resultado
+        # Se ejecuta en el hilo principal (llamada sincrona desde Empalme), asi
+        # que el velo de carga -misma infraestructura que usa Proyecciones- se
+        # muestra y se fuerza su repintado antes de bloquear, y se cierra tanto
+        # en exito como en error.
+        self._establecer_ocupado(True, "Ejecutando proyección para el empalme...")
+        QApplication.processEvents()
+        try:
+            resultado = self.controlador.ejecutar_analisis(seleccion, int(anio), int(mes), "manual")
+            self._proyeccion_lista(resultado, registrar=False)
+            return resultado
+        finally:
+            self._establecer_ocupado(False)
 
     def guardar_sesion_actual(self) -> None:
         if self.controlador.proyeccion_actual is None:
@@ -1931,6 +1940,18 @@ class VentanaPrincipal(QMainWindow):
                 velo.mostrar(mensaje or "Procesando…", "La aplicación sigue respondiendo.")
             else:
                 velo.ocultar()
+        # El velo cubre todo `cuerpo` -incluida la esquina de las alertas- y se
+        # eleva sobre sus hermanos al mostrarse (VeloCarga.mostrar hace
+        # self.raise_()). Sin este reordenamiento, una alerta que ya estuviera
+        # visible antes de esa elevación queda detrás del velo durante el
+        # desvanecimiento de salida (que no bloquea clics, a diferencia de la
+        # ocultación real) y su botón de cierre deja de recibir clics hasta
+        # que el usuario interactúa con algo más. `reposicionar()` reutiliza
+        # la misma lógica de `_reubicar()` para volver a elevar cada alerta
+        # activa por encima de lo que haya quedado delante de ellas.
+        notificaciones = getattr(self, "notificaciones", None)
+        if notificaciones is not None:
+            notificaciones.reposicionar()
 
     # Prefijos técnicos que no aportan nada al usuario y sí ruido al mensaje.
     _RUIDO_ERROR = ("Traceback", "Exception:", "ValueError:", "RuntimeError:", "KeyError:")
