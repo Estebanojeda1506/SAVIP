@@ -254,7 +254,7 @@ def resumen_ejecutivo(datos: DatosProyeccion) -> list[str]:
     diferencia_pct = resultado.get("diferencia_porcentual_segundo")
     if modelo_segundo and es_numero(diferencia_pct):
         parrafos.append(
-            f"La diferencia frente al segundo modelo ({texto_o(modelo_segundo)}) bajo el mismo criterio OOS "
+            f"La diferencia frente al segundo candidato ({texto_o(_nombre_visible_candidato(modelo_segundo))}) bajo el mismo criterio OOS "
             f"fue de {formato_porcentaje(diferencia_pct)}. Este valor se presenta con fines descriptivos y no "
             "corresponde a una prueba de significancia estadística."
         )
@@ -424,6 +424,51 @@ def _seccion_identificacion(datos: DatosProyeccion) -> Seccion:
     return Seccion("identificacion", "Identificación de la serie", bloques)
 
 
+# post-r1-metodologia-12-24, 20-08-2026 (Prompt Calendario 04). Texto comun
+# para describir el tratamiento calendario del candidato ganador, reutilizado
+# por ficha, seccion de horizonte y seccion de seleccion de modelo.
+_TEXTO_ESTRATEGIA_CALENDARIO = {
+    "fourier_k1": "Fourier anual (K=1, periodo 12 meses)",
+    "seasonal_naive": "Patrón estacional de 12 meses (Seasonal Naive)",
+    "ninguna": "Ninguno",
+}
+
+
+def _texto_estrategia_calendario(valor: Any) -> str:
+    return _TEXTO_ESTRATEGIA_CALENDARIO.get(str(valor), "No aplica")
+
+
+_NOMBRE_VISIBLE_MODELO_BASE = {
+    "naive": "Naive último valor",
+    "drift": "Drift",
+    "lineal": "Lineal (OLS)",
+    "logaritmico": "Logarítmica temporal (OLS)",
+    "exponencial_log_lineal": "Exponencial/log-lineal",
+    "huber": "Huber (robusta)",
+    "holt_lineal": "Holt lineal",
+    "holt_amortiguado": "Holt tendencia amortiguada",
+    "variacion_lineal": "Modelo sobre variación mensual",
+    "log_variacion": "Modelo sobre log-variación mensual",
+}
+
+
+def _nombre_visible_candidato(codigo: Any) -> str:
+    """Nombre legible de un candidato del pool a partir de su codigo interno.
+
+    Los codigos "fourier_k1__<base>" y "seasonal_naive" no deben llegar al
+    informe del usuario (item 12, Prompt Calendario 04).
+    """
+    texto = str(codigo or "").strip()
+    if not texto:
+        return ""
+    if texto == "seasonal_naive":
+        return "Seasonal Naive (m=12)"
+    if texto.startswith("fourier_k1__"):
+        base = texto[len("fourier_k1__"):]
+        return f"Fourier K=1 + {_NOMBRE_VISIBLE_MODELO_BASE.get(base, base)}"
+    return _NOMBRE_VISIBLE_MODELO_BASE.get(texto, texto)
+
+
 def _seccion_ficha(datos: DatosProyeccion) -> Seccion:
     resultado = datos.resultado
     solicitado = _solicitado(resultado)
@@ -449,7 +494,12 @@ def _seccion_ficha(datos: DatosProyeccion) -> Seccion:
         ("Último índice observado", f"{formato_indice(indice_final)} ({periodo_largo(periodo_final)})"),
         ("Horizonte solicitado", f"{formato_entero(solicitado.get('horizonte_solicitado'))} meses"),
         ("Alcance máximo de proyección de SAVIP", f"{formato_entero(info.get('alcance_maximo_proyeccion'))} meses" if es_numero(info.get("alcance_maximo_proyeccion")) else "No identificado"),
-        ("Modelo seleccionado", texto_o(info.get("modelo_seleccionado"), "No aplica")),
+        # post-r1-metodologia-12-24, 20-08-2026 (Prompt Calendario 04). El pool
+        # productivo tiene 21 candidatos (10 base + 10 Fourier K=1 + Seasonal
+        # Naive); se separa modelo base y tratamiento calendario para no
+        # exponer el codigo interno del candidato (p.ej. "fourier_k1__...").
+        ("Modelo base seleccionado", texto_o(_nombre_visible_candidato(info.get("modelo_base")) or solicitado.get("modelo_aplicado"), "No aplica")),
+        ("Tratamiento calendario", _texto_estrategia_calendario(info.get("estrategia_calendario"))),
         ("RMSE OOS de selección (1–24 meses)", formato_indice(info.get("rmse_seleccion_oos")) if es_numero(info.get("rmse_seleccion_oos")) else "No aplica"),
         ("Estado del horizonte", ESTADOS_VISIBLES.get(str(solicitado.get("estado")), texto_o(solicitado.get("estado"), "No disponible"))),
         ("Periodo proyectado final", periodo_largo(solicitado.get("periodo_proyectado")) if generado else "No aplica"),
@@ -1107,21 +1157,36 @@ def _seccion_horizonte(datos: DatosProyeccion) -> Seccion:
         "reajusta con toda la serie y se genera una trayectoria de 24 meses, de la cual se presenta el "
         "valor correspondiente al horizonte solicitado."
     )]
+    filas_metodologia = [
+        ["Horizonte solicitado", f"{formato_entero(info.get('horizonte_solicitado'))} meses"],
+        ["Alcance máximo de proyección de SAVIP", f"{formato_entero(info.get('alcance_maximo_proyeccion'))} meses"],
+        ["Primer origen del backtesting (N0)", f"{formato_entero(info.get('n0_backtesting'))} observaciones"],
+        # post-r1-metodologia-12-24, 20-08-2026 (Prompt Calendario 04). Se
+        # separa modelo base y tratamiento calendario para no mostrar el
+        # codigo interno del candidato (p.ej. "fourier_k1__holt_lineal").
+        ["Modelo base seleccionado", texto_o(_nombre_visible_candidato(info.get("modelo_base") or info.get("modelo_seleccionado")))],
+        ["Tratamiento calendario", _texto_estrategia_calendario(info.get("estrategia_calendario"))],
+        ["RMSE OOS usado en la selección (1–24 meses)", formato_indice(info.get("rmse_seleccion_oos"))],
+        ["Segundo candidato", texto_o(_nombre_visible_candidato(info.get("modelo_segundo")), "No aplica")],
+        [
+            "Diferencia frente al segundo modelo",
+            formato_porcentaje(info.get("diferencia_porcentual_segundo"))
+            if es_numero(info.get("diferencia_porcentual_segundo")) else "No aplica",
+        ],
+    ]
+    if info.get("estrategia_calendario") == "fourier_k1":
+        filas_metodologia.extend([
+            ["Fourier K", formato_entero(info.get("fourier_k"))],
+            ["Fourier periodo", f"{formato_entero(info.get('fourier_periodo'))} meses"],
+            ["Coeficiente seno (a)", formato_indice(info.get("fourier_coef_sin_1"))],
+            ["Coeficiente coseno (b)", formato_indice(info.get("fourier_coef_cos_1"))],
+            ["Amplitud", formato_indice(info.get("fourier_amplitud"))],
+        ])
+    elif info.get("estrategia_calendario") == "seasonal_naive":
+        filas_metodologia.append(["Periodo estacional", f"{formato_entero(info.get('fourier_periodo'))} meses"])
     bloques.append(Tabla(
         encabezados=["Concepto", "Valor"],
-        filas=[
-            ["Horizonte solicitado", f"{formato_entero(info.get('horizonte_solicitado'))} meses"],
-            ["Alcance máximo de proyección de SAVIP", f"{formato_entero(info.get('alcance_maximo_proyeccion'))} meses"],
-            ["Primer origen del backtesting (N0)", f"{formato_entero(info.get('n0_backtesting'))} observaciones"],
-            ["Modelo seleccionado", texto_o(info.get("modelo_seleccionado"))],
-            ["RMSE OOS usado en la selección (1–24 meses)", formato_indice(info.get("rmse_seleccion_oos"))],
-            ["Segundo modelo", texto_o(info.get("modelo_segundo"), "No aplica")],
-            [
-                "Diferencia frente al segundo modelo",
-                formato_porcentaje(info.get("diferencia_porcentual_segundo"))
-                if es_numero(info.get("diferencia_porcentual_segundo")) else "No aplica",
-            ],
-        ],
+        filas=filas_metodologia,
         titulo="Metodología de selección (N0=12, H=24)",
         columnas_numericas=(),
     ))

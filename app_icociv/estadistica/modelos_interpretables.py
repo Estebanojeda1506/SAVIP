@@ -44,6 +44,31 @@ MODELOS_SERIE_TEMPORAL = {
 MODELOS_ESTADISTICOS = tuple(nombre for nombre in MODELOS_INTERPRETABLES if nombre not in MODELOS_BENCHMARK)
 MIN_ITERACIONES_SELECCION = MIN_ITERACIONES_WF
 
+# post-r1-metodologia-12-24, 20-08-2026 (Prompt Calendario 04). Decision final
+# de los experimentos de patron calendario (ver
+# SAVIP_DECISION_N0_CALENDARIO/DECISION_N0_CALENDARIO_INFORME.txt, Ruta 2):
+# N0=12 y H=24 se mantienen; se añade Fourier anual K=1 como estrategia
+# calendario candidata sobre cada uno de los 10 modelos que compiten en
+# produccion, mas Seasonal Naive (m=12) como benchmark estacional. Los 21
+# candidatos resultantes compiten bajo el mismo criterio RMSE OOS rectangular
+# comun que ya existia; ninguno tiene prioridad ni veto.
+#
+# `MODELOS_FOURIER_BASE` debe coincidir con los 10 candidatos que realmente
+# compiten en servicio_proyeccion.py (MODELOS_INTERPRETABLES sin
+# promedio_movil/variacion_reciente, ver ahi `MODELOS_PARAMETRO_SIN_SUSTENTO`
+# y `_catalogo_activo`). Esa exclusion vive en la capa de servicio; se declara
+# aqui explicitamente porque `OBSERVACIONES_MINIMAS_MODELO` y el catalogo de
+# ajuste viven en esta capa de modelos.
+FOURIER_K1_PREFIJO = "fourier_k1__"
+CANDIDATO_SEASONAL_NAIVE = "seasonal_naive"
+MODELOS_FOURIER_BASE = tuple(
+    m for m in MODELOS_INTERPRETABLES if m not in {"promedio_movil", "variacion_reciente"}
+)
+MODELOS_FOURIER_K1 = tuple(f"{FOURIER_K1_PREFIJO}{m}" for m in MODELOS_FOURIER_BASE)
+#: Los 21 candidatos productivos: 10 modelos base + 10 variantes Fourier K=1 +
+#: Seasonal Naive. Fuente unica que consume servicio_proyeccion.py.
+CATALOGO_POOL_CALENDARIO = MODELOS_FOURIER_BASE + MODELOS_FOURIER_K1 + (CANDIDATO_SEASONAL_NAIVE,)
+
 
 #: Observaciones minimas de cada modelo, DERIVADAS de su propia formulacion.
 #:
@@ -89,6 +114,25 @@ OBSERVACIONES_MINIMAS_MODELO: dict[str, int] = {
     "promedio_movil": 2,
     "variacion_reciente": 3,
 }
+
+
+# post-r1-metodologia-12-24, 20-08-2026 (Prompt Calendario 04). Minimos de
+# las variantes calendario, derivados igual que los del resto del catalogo
+# (cardinalidad: numero de parametros mas uno).
+# - Fourier K=1: la regresion auxiliar y_t = alpha + beta*t + a*sin(2*pi*t/12)
+#   + b*cos(2*pi*t/12) tiene k=4 parametros propios, luego exige n>=5 para no
+#   interpolar; el modelo base se ajusta despues sobre la serie desestacio-
+#   nalizada, que tiene el mismo largo n, por lo que su propio minimo tambien
+#   debe cumplirse. El minimo combinado es max(5, minimo_del_modelo_base).
+# - Seasonal Naive (m=12): el pronostico de h=1 usa el valor observado 12
+#   posiciones atras (mismo mes del año anterior); con menos de 12
+#   observaciones ese valor no existe. Minimo = 12.
+for _base_fourier in MODELOS_FOURIER_BASE:
+    OBSERVACIONES_MINIMAS_MODELO[f"{FOURIER_K1_PREFIJO}{_base_fourier}"] = max(
+        5, OBSERVACIONES_MINIMAS_MODELO[_base_fourier]
+    )
+OBSERVACIONES_MINIMAS_MODELO[CANDIDATO_SEASONAL_NAIVE] = 12
+del _base_fourier
 
 
 def observaciones_minimas_catalogo(modelos: Any = None) -> int:
@@ -152,6 +196,10 @@ def ajustar_modelo_interpretable(
         resultado = _ajustar_promedio_movil(t_arr, y_arr)
     elif nombre == "variacion_reciente":
         resultado = _ajustar_variacion_reciente(t_arr, y_arr)
+    elif nombre == CANDIDATO_SEASONAL_NAIVE:
+        resultado = _ajustar_seasonal_naive(t_arr, y_arr)
+    elif nombre.startswith(FOURIER_K1_PREFIJO):
+        resultado = _ajustar_fourier_k1(t_arr, y_arr, modelo_base=nombre[len(FOURIER_K1_PREFIJO):])
     else:
         raise ValueError(f"Modelo no soportado: {nombre}")
 
@@ -1049,6 +1097,169 @@ def _ajustar_variacion_reciente(t: np.ndarray, y: np.ndarray, ventana: int = 6) 
         "parametros": {"ventana": ventana, "cambio_medio": cambio_medio},
         "es_benchmark": True,
         "tendencia_ok": cambio_medio >= 0,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Fourier K=1 (estrategia calendario) y Seasonal Naive (benchmark estacional)
+# post-r1-metodologia-12-24, 20-08-2026 (Prompt Calendario 04).
+# ---------------------------------------------------------------------------
+
+#: Mapa nombre_base -> (funcion_bare, kwargs) para los 10 modelos que
+#: compiten en produccion. Reutilizado por Fourier K=1 para ajustar el
+#: modelo base sobre la serie ya desestacionalizada, sin pasar por
+#: `ajustar_modelo_interpretable` (evita diagnosticos/metricas intermedios
+#: sobre una serie que no es la final).
+_DISPATCH_MODELO_BASE: dict[str, tuple[Any, dict[str, Any]]] = {
+    "lineal": (_ajustar_lineal, {}),
+    "logaritmico": (_ajustar_logaritmico, {}),
+    "exponencial_log_lineal": (_ajustar_exponencial_log_lineal, {}),
+    "huber": (_ajustar_huber, {}),
+    "holt_lineal": (_ajustar_holt_lineal, {"amortiguado": False}),
+    "holt_amortiguado": (_ajustar_holt_lineal, {"amortiguado": True}),
+    "variacion_lineal": (_ajustar_variacion_lineal, {"logaritmica": False}),
+    "log_variacion": (_ajustar_variacion_lineal, {"logaritmica": True}),
+    "naive": (_ajustar_naive, {}),
+    "drift": (_ajustar_drift, {}),
+}
+
+#: Cache de coeficientes Fourier K=1 por ventana exacta (mismo patron que
+#: `_MEMORIA_HOLT`, mas abajo). Evita recalcular la regresion auxiliar sen/cos
+#: una vez por cada uno de los 10 modelos base cuando comparten el mismo
+#: origen y horizonte de backtesting (item 22, Prompt Calendario 04).
+_MEMORIA_FOURIER: dict[bytes, tuple[float, float]] = {}
+_MEMORIA_FOURIER_LIMITE = 4096
+
+
+def _fourier_k1_coeficientes(t: np.ndarray, y: np.ndarray) -> tuple[float, float]:
+    """OLS auxiliar y_t = alpha + beta*t + a*sin(2*pi*t/12) + b*cos(2*pi*t/12).
+
+    Devuelve (a, b): el componente calendario es S_F(t) = a*sin(2*pi*t/12) +
+    b*cos(2*pi*t/12). La tendencia auxiliar alpha+beta*t solo evita que los
+    terminos armonicos absorban tendencia general; no se publica como
+    parametro del componente calendario (item 10, Prompt Calendario 04).
+    Fuente: Hyndman & Athanasopoulos, Forecasting: Principles and Practice,
+    3a ed., "Dynamic harmonic regression" (terminos de Fourier, K=1,
+    periodo=12). https://otexts.com/fpp3/dhr.html
+    """
+    if len(t) < 5:
+        raise ValueError(
+            "Fourier K=1 requiere al menos 5 observaciones (4 parametros auxiliares mas 1)."
+        )
+    clave = y.tobytes()
+    cacheado = _MEMORIA_FOURIER.get(clave)
+    if cacheado is not None:
+        return cacheado
+    s = np.sin(2.0 * np.pi * t / 12.0)
+    c = np.cos(2.0 * np.pi * t / 12.0)
+    disenio = np.column_stack([np.ones_like(t), t, s, c])
+    coeficientes, *_ = np.linalg.lstsq(disenio, y, rcond=None)
+    a, b = float(coeficientes[2]), float(coeficientes[3])
+    if not (math.isfinite(a) and math.isfinite(b)):
+        raise ValueError("Los coeficientes de Fourier K=1 no son finitos.")
+    if len(_MEMORIA_FOURIER) >= _MEMORIA_FOURIER_LIMITE:
+        _MEMORIA_FOURIER.clear()
+    _MEMORIA_FOURIER[clave] = (a, b)
+    return a, b
+
+
+def _componente_fourier_k1(t: np.ndarray, a: float, b: float) -> np.ndarray:
+    return a * np.sin(2.0 * np.pi * t / 12.0) + b * np.cos(2.0 * np.pi * t / 12.0)
+
+
+def _ajustar_fourier_k1(t: np.ndarray, y: np.ndarray, modelo_base: str) -> dict[str, Any]:
+    """Fourier anual K=1 sobre `modelo_base`: retira S_F(t), ajusta el modelo
+    base sobre la serie desestacionalizada y repone S_F al predecir (item 5,
+    Prompt Calendario 04). El error fuera de muestra se calcula siempre
+    contra la serie original, porque `predict` ya repone el componente
+    calendario antes de devolver el valor."""
+    if modelo_base not in _DISPATCH_MODELO_BASE:
+        raise ValueError(f"Modelo base no soportado para Fourier K=1: {modelo_base}")
+    a, b = _fourier_k1_coeficientes(t, y)
+    s_f_hist = _componente_fourier_k1(t, a, b)
+    y_estrella = y - s_f_hist
+    funcion_base, kwargs_base = _DISPATCH_MODELO_BASE[modelo_base]
+    base = funcion_base(t, y_estrella, **kwargs_base)
+    predict_base = base["predict"]
+
+    def predict(tt: Any) -> np.ndarray:
+        t_futuro = np.asarray(tt, dtype=float)
+        return np.asarray(predict_base(t_futuro), dtype=float) + _componente_fourier_k1(t_futuro, a, b)
+
+    nombre_visible_base = base.get("nombre_visible", modelo_base)
+    amplitud = math.sqrt(a * a + b * b)
+    resultado = dict(base)
+    resultado.update(
+        {
+            "nombre": f"{FOURIER_K1_PREFIJO}{modelo_base}",
+            "name": f"Fourier K=1 + {nombre_visible_base}",
+            "nombre_visible": f"Fourier K=1 + {nombre_visible_base}",
+            "predict": predict,
+            "estrategia_calendario": "fourier_k1",
+            "modelo_base": modelo_base,
+            # a,b se suman al conteo de parametros del modelo base: el
+            # componente calendario reincorporado tambien se estimo de los
+            # datos (coherente con el uso de k en calcular_metricas/AIC-AICc).
+            "k": int(base.get("k", 0)) + 2,
+            "parametros": {
+                **(base.get("parametros") or {}),
+                "fourier_k": 1,
+                "fourier_periodo": 12,
+                "fourier_coef_sin_1": a,
+                "fourier_coef_cos_1": b,
+                "fourier_amplitud": amplitud,
+                "modelo_base": modelo_base,
+            },
+        }
+    )
+    return resultado
+
+
+def _ajustar_seasonal_naive(t: np.ndarray, y: np.ndarray, m: int = 12) -> dict[str, Any]:
+    """Seasonal Naive: cada periodo futuro toma el ultimo valor observado de
+    la misma posicion estacional (m=12). Benchmark estandar (item 7, Prompt
+    Calendario 04); no tiene prioridad ni veto, compite bajo el mismo
+    criterio RMSE que los demas 20 candidatos. Fuente: Hyndman &
+    Athanasopoulos, Forecasting: Principles and Practice, 3a ed., "Simple
+    methods" (Seasonal naive method). https://otexts.com/fpp3/simple-methods.html
+    """
+    n = len(y)
+    if n < m:
+        raise ValueError(f"Seasonal Naive (m={m}) requiere al menos {m} observaciones.")
+    ultimo_t = float(t[-1])
+
+    def predict(tt: Any) -> np.ndarray:
+        t_futuro = np.asarray(tt, dtype=float)
+        salida = np.empty(len(t_futuro), dtype=float)
+        for i, objetivo in enumerate(t_futuro):
+            if objetivo <= ultimo_t:
+                # Valor ajustado in-sample estandar (FPP3): y_t_gorro = y_(t-m).
+                # Indefinido para los primeros m periodos, igual que en
+                # cualquier libro de texto sobre Seasonal Naive.
+                pos_objetivo = int(round(objetivo - t[0]))
+                pos_estacional = pos_objetivo - m
+                salida[i] = y[pos_estacional] if 0 <= pos_estacional < n else float("nan")
+                continue
+            h = int(round(objetivo - ultimo_t))
+            k = -(-h // m)  # techo de h/m
+            idx_t = objetivo - m * k
+            pos = int(round(idx_t - t[0]))
+            if pos < 0 or pos >= n:
+                raise ValueError("Seasonal Naive: posicion estacional fuera de rango.")
+            salida[i] = y[pos]
+        return salida
+
+    return {
+        "nombre": CANDIDATO_SEASONAL_NAIVE,
+        "name": "Seasonal Naive (m=12)",
+        "nombre_visible": "Seasonal Naive (m=12)",
+        "k": 1,
+        "predict": predict,
+        "parametros": {"periodo": m},
+        "es_benchmark": True,
+        "estrategia_calendario": CANDIDATO_SEASONAL_NAIVE,
+        "modelo_base": None,
+        "tendencia_ok": True,
     }
 
 

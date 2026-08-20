@@ -84,6 +84,9 @@ from app_icociv.estadistica.analisis_series import (
     validar_serie_mensual,
 )
 from app_icociv.estadistica.modelos_interpretables import (
+    CANDIDATO_SEASONAL_NAIVE,
+    CATALOGO_POOL_CALENDARIO,
+    FOURIER_K1_PREFIJO,
     MODELOS_INTERPRETABLES,
     ajustar_modelos_candidatos,
     observaciones_minimas_catalogo,
@@ -120,6 +123,33 @@ def _catalogo_activo() -> tuple[str, ...]:
     return tuple(m for m in MODELOS_INTERPRETABLES if m not in MODELOS_PARAMETRO_SIN_SUSTENTO)
 
 
+# post-r1-metodologia-12-24, 20-08-2026 (Prompt Calendario 04). Decision final
+# de los experimentos de patron calendario (Ruta 2, ver
+# SAVIP_DECISION_N0_CALENDARIO/DECISION_N0_CALENDARIO_INFORME.txt): se
+# mantiene N0=12/H=24 y se añade el pool de 21 candidatos (10 modelos base +
+# 10 variantes Fourier K=1 + Seasonal Naive) a la seleccion productiva. El
+# pool en si (`CATALOGO_POOL_CALENDARIO`) vive en modelos_interpretables.py,
+# la capa de modelos; aqui solo se usa para construir `modelos_evaluados` y
+# para distinguir estrategia_calendario/modelo_base del candidato ganador.
+# `_catalogo_activo()` NO cambia de significado (sigue siendo los 10 modelos
+# base, usado por los contadores descriptivos de evidencia OOS que no
+# gobiernan la seleccion).
+def _estrategia_calendario_de_candidato(codigo: str) -> str:
+    if codigo.startswith(FOURIER_K1_PREFIJO):
+        return "fourier_k1"
+    if codigo == CANDIDATO_SEASONAL_NAIVE:
+        return "seasonal_naive"
+    return "ninguna"
+
+
+def _modelo_base_de_candidato(codigo: str) -> str | None:
+    if codigo.startswith(FOURIER_K1_PREFIJO):
+        return codigo[len(FOURIER_K1_PREFIJO):]
+    if codigo == CANDIDATO_SEASONAL_NAIVE:
+        return None
+    return codigo
+
+
 CATALOGO_MODELOS_CANDIDATOS = {
     "naive": ("Naive último valor", "Benchmark sobre nivel", "Referencia mínima: último valor observado."),
     "drift": ("Drift", "Benchmark con tendencia", "Extiende el cambio promedio entre primer y último dato."),
@@ -134,6 +164,31 @@ CATALOGO_MODELOS_CANDIDATOS = {
     "promedio_movil": ("Promedio movil", "Benchmark descriptivo", "Contraste simple; no se privilegia como modelo principal."),
 }
 
+# post-r1-metodologia-12-24, 20-08-2026 (Prompt Calendario 04). Entradas de
+# catalogo para los 10 candidatos Fourier K=1 y el benchmark Seasonal Naive,
+# generadas a partir de las entradas base ya existentes para no repetir a
+# mano 11 tuplas casi identicas.
+for _nombre_base in _catalogo_activo():
+    _visible_base, _tipo_base, _motivo_base = CATALOGO_MODELOS_CANDIDATOS[_nombre_base]
+    CATALOGO_MODELOS_CANDIDATOS[f"{FOURIER_K1_PREFIJO}{_nombre_base}"] = (
+        f"Fourier K=1 + {_visible_base}",
+        "Calendario (Fourier K=1)",
+        (
+            f"Componente calendario Fourier anual (K=1, periodo 12 meses) reincorporado "
+            f"sobre {_visible_base}; compite bajo el mismo criterio RMSE OOS que los demas "
+            "candidatos, sin prioridad ni veto."
+        ),
+    )
+del _nombre_base, _visible_base, _tipo_base, _motivo_base
+CATALOGO_MODELOS_CANDIDATOS[CANDIDATO_SEASONAL_NAIVE] = (
+    "Seasonal Naive (m=12)",
+    "Benchmark estacional",
+    (
+        "Toma el último valor observado de la misma posición del año (periodo 12 meses). "
+        "Compite bajo el mismo criterio RMSE OOS que los demás candidatos; no tiene "
+        "prioridad ni veto por ser benchmark."
+    ),
+)
 
 
 # ==============================
@@ -1244,6 +1299,32 @@ def _ejecutar_proyeccion_base(
             "mase": m["MASE"],
             "sesgo": m["sesgo"],
         })
+    # post-r1-metodologia-12-24, 20-08-2026 (Prompt Calendario 04). Distincion
+    # explicita candidato/modelo_base/estrategia_calendario (item 4 y 11): el
+    # candidato ganador (`modelo_codigo`) puede ser un modelo base sin
+    # tratamiento, una variante Fourier K=1 sobre un modelo base, o Seasonal
+    # Naive. Los parametros del componente calendario (si aplica) ya viajan en
+    # `modelo["parametros"]`, puestos ahi por `_ajustar_fourier_k1`.
+    estrategia_calendario_ganadora = modelo.get("estrategia_calendario") or _estrategia_calendario_de_candidato(
+        modelo_codigo
+    )
+    modelo_base_ganador = modelo.get("modelo_base", _modelo_base_de_candidato(modelo_codigo))
+    parametros_ganador = modelo.get("parametros") or {}
+    if estrategia_calendario_ganadora == "fourier_k1":
+        fourier_k = parametros_ganador.get("fourier_k")
+        fourier_periodo = parametros_ganador.get("fourier_periodo")
+        fourier_coef_sin_1 = parametros_ganador.get("fourier_coef_sin_1")
+        fourier_coef_cos_1 = parametros_ganador.get("fourier_coef_cos_1")
+        fourier_amplitud = parametros_ganador.get("fourier_amplitud")
+    elif estrategia_calendario_ganadora == "seasonal_naive":
+        fourier_k = None
+        fourier_periodo = 12
+        fourier_coef_sin_1 = None
+        fourier_coef_cos_1 = None
+        fourier_amplitud = None
+    else:
+        fourier_k = fourier_periodo = fourier_coef_sin_1 = fourier_coef_cos_1 = fourier_amplitud = None
+
     horizonte_info = {
         "alcance_maximo_proyeccion": H_OPERATIVO_MAX,
         "mensaje_alcance": mensaje_alcance,
@@ -1254,6 +1335,15 @@ def _ejecutar_proyeccion_base(
         "horizonte_solicitado": horizonte_solicitado,
         "horizonte_finalmente_permitido": horizonte_permitido,
         "modelo_seleccionado": modelo_codigo,
+        # post-r1-metodologia-12-24, 20-08-2026 (Prompt Calendario 04).
+        "candidato_seleccionado": modelo_codigo,
+        "estrategia_calendario": estrategia_calendario_ganadora,
+        "modelo_base": modelo_base_ganador,
+        "fourier_k": fourier_k,
+        "fourier_periodo": fourier_periodo,
+        "fourier_coef_sin_1": fourier_coef_sin_1,
+        "fourier_coef_cos_1": fourier_coef_cos_1,
+        "fourier_amplitud": fourier_amplitud,
         # Metrica DECISIVA: agregada 1..24 sobre el rectangulo, la que decidio
         # el modelo. "Modelo seleccionado" / "Modelo con menor RMSE OOS en la
         # evaluación común de 1 a 24 meses" -no "modelo estadísticamente
@@ -1833,6 +1923,15 @@ def _estructurar_resultado_horizontes(resultado: dict[str, Any], origen_horizont
         "indice_proyectado": _numero_finito_o_none(resultado.get("y_proj")) if generado else None,
         "periodo_proyectado": resultado.get("periodo_proj") if generado else None,
         "modelo_aplicado": resultado.get("model_name") if generado else None,
+        # post-r1-metodologia-12-24, 20-08-2026 (Prompt Calendario 04).
+        "candidato_seleccionado": (resultado.get("horizonte_info") or {}).get("candidato_seleccionado") if generado else None,
+        "estrategia_calendario": (resultado.get("horizonte_info") or {}).get("estrategia_calendario") if generado else None,
+        "modelo_base": (resultado.get("horizonte_info") or {}).get("modelo_base") if generado else None,
+        "fourier_k": (resultado.get("horizonte_info") or {}).get("fourier_k") if generado else None,
+        "fourier_periodo": (resultado.get("horizonte_info") or {}).get("fourier_periodo") if generado else None,
+        "fourier_coef_sin_1": (resultado.get("horizonte_info") or {}).get("fourier_coef_sin_1") if generado else None,
+        "fourier_coef_cos_1": (resultado.get("horizonte_info") or {}).get("fourier_coef_cos_1") if generado else None,
+        "fourier_amplitud": (resultado.get("horizonte_info") or {}).get("fourier_amplitud") if generado else None,
         "ic80": [
             _numero_finito_o_none(resultado.get("ci80_lo")),
             _numero_finito_o_none(resultado.get("ci80_hi")),
@@ -2176,9 +2275,12 @@ def _modelos_para_analisis(
         str(item.get("severidad", "")).lower() == "posible_atipico" for item in outliers
     )
 
-    modelos_unicos = tuple(
-        m for m in MODELOS_INTERPRETABLES if m not in MODELOS_PARAMETRO_SIN_SUSTENTO
-    )
+    # post-r1-metodologia-12-24, 20-08-2026 (Prompt Calendario 04). El pool
+    # productivo pasa de 10 a 21 candidatos: los 10 modelos base, sus 10
+    # variantes con Fourier K=1 y Seasonal Naive (m=12), todos bajo el mismo
+    # criterio de estimabilidad y el mismo RMSE OOS rectangular comun. Fuente
+    # unica: CATALOGO_POOL_CALENDARIO (modelos_interpretables.py).
+    modelos_unicos = CATALOGO_POOL_CALENDARIO
     return modelos_unicos, {
         "modelos_evaluados": list(modelos_unicos),
         "criterio_elegibilidad": (
@@ -2194,6 +2296,9 @@ def _modelos_para_analisis(
         "razones": [
             "Catalogo por estimabilidad: compiten todos los modelos ajustables cuyos "
             "parametros esten estimados de los datos o sustentados por fuente.",
+            "Incluye 10 modelos base, 10 variantes con Fourier anual K=1 y Seasonal "
+            "Naive (m=12) como benchmark estacional; los 21 compiten bajo el mismo "
+            "criterio RMSE OOS rectangular comun, sin prioridad ni veto.",
         ],
         # Se conservan como DESCRIPTIVOS: se publican en la trazabilidad pero ya no
         # gobiernan el catalogo.

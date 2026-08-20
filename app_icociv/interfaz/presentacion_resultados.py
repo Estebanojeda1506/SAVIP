@@ -163,8 +163,22 @@ def construir_html_explicacion_tarjeta(
         if not modelos:
             modelos = list((proyeccion.get("stats") or {}).get("modelos_evaluados") or [])
         comparacion = _comparacion_modelo_seleccionado(proyeccion)
+        # post-r1-metodologia-12-24, 20-08-2026 (Prompt Calendario 04). El pool
+        # productivo tiene 21 candidatos: 10 modelos base, 10 variantes con
+        # Fourier anual K=1 y Seasonal Naive (m=12). "Modelo base" y
+        # "Tratamiento calendario" se muestran por separado para no dar a
+        # entender que Fourier es, por si solo, un modelo de tendencia
+        # independiente (item 4 y 13).
+        estrategia_calendario = solicitado.get("estrategia_calendario")
+        texto_estrategia = {
+            "fourier_k1": "Fourier anual (K=1, periodo 12 meses)",
+            "seasonal_naive": "Patrón estacional de 12 meses (Seasonal Naive)",
+            "ninguna": "Ninguno",
+        }.get(str(estrategia_calendario), NO_APLICA)
         filas = [
             ("Modelo final aplicado", solicitado.get("modelo_aplicado") or proyeccion.get("model_name"), ""),
+            ("Modelo base seleccionado", _nombre_visible_modelo_base(solicitado.get("modelo_base")) or NO_APLICA, ""),
+            ("Tratamiento calendario", texto_estrategia, ""),
             ("Modelos evaluados", modelos or NO_EVALUADO, ""),
             # H-1/H-7, 18-08-2026 (reauditoria dirigida V-CODEX-R2 residual).
             # Decia "...MASE, estabilidad, sesgo, intervalos y parsimonia",
@@ -182,6 +196,29 @@ def construir_html_explicacion_tarjeta(
             ("Razón de selección", proyeccion.get("justificacion_modelo") or proyeccion.get("criterio_seleccion"), ""),
             ("Cautelas", (proyeccion.get("factibilidad") or {}).get("advertencias") or evaluacion_solicitada.get("advertencias"), ""),
         ]
+        if estrategia_calendario == "fourier_k1":
+            filas.append((
+                "Explicación del tratamiento Fourier",
+                "El tratamiento Fourier representa un patrón calendario anual suave mediante un "
+                "par de términos seno y coseno de periodo 12 meses. El componente se estima "
+                "únicamente con la historia disponible en cada origen del backtesting, se retira "
+                "antes de ajustar el modelo base y se reincorpora al pronóstico final. Su selección "
+                "depende exclusivamente del desempeño fuera de muestra bajo el mismo criterio RMSE "
+                "utilizado por los demás candidatos.",
+                "",
+            ))
+            filas.append(("Coeficiente seno (a)", formatear_valor(solicitado.get("fourier_coef_sin_1")), ""))
+            filas.append(("Coeficiente coseno (b)", formatear_valor(solicitado.get("fourier_coef_cos_1")), ""))
+            filas.append(("Amplitud", formatear_valor(solicitado.get("fourier_amplitud")), ""))
+        elif estrategia_calendario == "seasonal_naive":
+            filas.append((
+                "Explicación de Seasonal Naive",
+                "Seasonal Naive toma el último valor observado de la misma posición del año "
+                "(periodo 12 meses) como referencia estacional. Compite como benchmark bajo el "
+                "mismo criterio RMSE que los demás candidatos, sin prioridad ni sustitución "
+                "automática.",
+                "",
+            ))
         nota = "El modelo final se elige por evidencia fuera de muestra y no solo por ajuste dentro de la muestra."
         titulo = "Cómo se seleccionó el modelo"
     elif clave == "estado":
@@ -291,6 +328,30 @@ GLOSARIO_ESTADOS_HORIZONTE = (
         "Todavía no se ejecutó un análisis para esta serie, o el resultado mostrado no incluye este campo.",
     ),
 )
+
+
+# post-r1-metodologia-12-24, 20-08-2026 (Prompt Calendario 04). Nombre legible
+# del modelo base: el codigo interno ("holt_amortiguado") no debe llegar a la
+# interfaz del usuario.
+_NOMBRE_VISIBLE_MODELO_BASE = {
+    "naive": "Naive último valor",
+    "drift": "Drift",
+    "lineal": "Lineal (OLS)",
+    "logaritmico": "Logarítmica temporal (OLS)",
+    "exponencial_log_lineal": "Exponencial/log-lineal",
+    "huber": "Huber (robusta)",
+    "holt_lineal": "Holt lineal",
+    "holt_amortiguado": "Holt tendencia amortiguada",
+    "variacion_lineal": "Modelo sobre variación mensual",
+    "log_variacion": "Modelo sobre log-variación mensual",
+}
+
+
+def _nombre_visible_modelo_base(codigo: Any) -> str:
+    texto = str(codigo or "").strip()
+    if not texto or texto.lower() == "none":
+        return ""
+    return _NOMBRE_VISIBLE_MODELO_BASE.get(texto, texto)
 
 
 def _bloque_glosario_estados() -> str:

@@ -1307,10 +1307,14 @@ class VentanaPrincipal(QMainWindow):
         # post-r1-metodologia-12-24, 19-08-2026 (Prompt 13). Retirado
         # "Horizonte estadístico": el mensaje ahora resume el modelo
         # seleccionado y el horizonte efectivamente entregado.
-        horizonte_info = proyeccion.get("horizonte_info", {})
+        # post-r1-metodologia-12-24, 20-08-2026 (Prompt Calendario 04). El pool
+        # productivo incluye candidatos Fourier K=1 ("fourier_k1__<base>") y
+        # Seasonal Naive: el nombre visible (modelo_aplicado) distingue
+        # modelo base y tratamiento calendario en vez de mostrar el codigo
+        # interno del candidato.
         self.lbl_horizonte_recomendado.setText(
             f"Horizonte solicitado: {solicitado.get('horizonte_solicitado', '')} meses. "
-            f"Modelo seleccionado: {horizonte_info.get('modelo_seleccionado') or 'No aplica'}. "
+            f"Modelo seleccionado: {solicitado.get('modelo_aplicado') or 'No aplica'}. "
             f"Alcance máximo de SAVIP: {H_OPERATIVO_MAX} meses."
         )
         self.etiqueta_estado.setText("Proyección ejecutada correctamente.")
