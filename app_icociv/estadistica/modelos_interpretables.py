@@ -1127,7 +1127,7 @@ _DISPATCH_MODELO_BASE: dict[str, tuple[Any, dict[str, Any]]] = {
 #: `_MEMORIA_HOLT`, mas abajo). Evita recalcular la regresion auxiliar sen/cos
 #: una vez por cada uno de los 10 modelos base cuando comparten el mismo
 #: origen y horizonte de backtesting (item 22, Prompt Calendario 04).
-_MEMORIA_FOURIER: dict[bytes, tuple[float, float]] = {}
+_MEMORIA_FOURIER: dict[tuple, tuple[float, float]] = {}
 _MEMORIA_FOURIER_LIMITE = 4096
 
 
@@ -1146,7 +1146,14 @@ def _fourier_k1_coeficientes(t: np.ndarray, y: np.ndarray) -> tuple[float, float
         raise ValueError(
             "Fourier K=1 requiere al menos 5 observaciones (4 parametros auxiliares mas 1)."
         )
-    clave = y.tobytes()
+    # post-r1-metodologia-12-24, 20-08-2026 (Prompt Calendario 06, hallazgo 2
+    # de auditoria). La clave anterior usaba solo y.tobytes(), ignorando el
+    # eje t: dos llamadas con el mismo vector y pero ejes temporales
+    # distintos (p.ej. offsets/alineaciones de calendario distintas)
+    # reutilizarian coeficientes incorrectos. La clave ahora identifica
+    # forma y dtype de ambos arrays ademas de sus bytes, sin incluir objetos
+    # mutables (los propios arrays no se guardan como clave).
+    clave = (y.shape, y.dtype.str, y.tobytes(), t.shape, t.dtype.str, t.tobytes())
     cacheado = _MEMORIA_FOURIER.get(clave)
     if cacheado is not None:
         return cacheado
@@ -1197,10 +1204,16 @@ def _ajustar_fourier_k1(t: np.ndarray, y: np.ndarray, modelo_base: str) -> dict[
             "predict": predict,
             "estrategia_calendario": "fourier_k1",
             "modelo_base": modelo_base,
-            # a,b se suman al conteo de parametros del modelo base: el
-            # componente calendario reincorporado tambien se estimo de los
-            # datos (coherente con el uso de k en calcular_metricas/AIC-AICc).
-            "k": int(base.get("k", 0)) + 2,
+            # post-r1-metodologia-12-24, 20-08-2026 (Prompt Calendario 06,
+            # hallazgo 3 de auditoria). k NO interviene en la seleccion RMSE
+            # (verificado: _seleccionar_modelo_rectangular no lo usa; el unico
+            # consumidor productivo es calcular_metricas -> AIC/AICc/R2
+            # ajustado, descriptivos). La regresion auxiliar Fourier estima
+            # CUATRO parametros (alpha, beta, a, b) con la misma historia que
+            # el modelo base, aunque alpha y beta no se sumen al pronostico
+            # final: los cuatro consumen grados de libertad igual. Antes se
+            # sumaba +2 (solo a,b); se corrige a +4.
+            "k": int(base.get("k", 0)) + 4,
             "parametros": {
                 **(base.get("parametros") or {}),
                 "fourier_k": 1,

@@ -20,6 +20,7 @@ from typing import Any
 import pandas as pd
 
 from app_icociv.config.rutas import VERSION
+from app_icociv.proyeccion.servicio_proyeccion import nombre_visible_candidato
 from app_icociv.reportes import graficas
 from app_icociv.reportes.modelo import (
     Aviso,
@@ -438,35 +439,11 @@ def _texto_estrategia_calendario(valor: Any) -> str:
     return _TEXTO_ESTRATEGIA_CALENDARIO.get(str(valor), "No aplica")
 
 
-_NOMBRE_VISIBLE_MODELO_BASE = {
-    "naive": "Naive último valor",
-    "drift": "Drift",
-    "lineal": "Lineal (OLS)",
-    "logaritmico": "Logarítmica temporal (OLS)",
-    "exponencial_log_lineal": "Exponencial/log-lineal",
-    "huber": "Huber (robusta)",
-    "holt_lineal": "Holt lineal",
-    "holt_amortiguado": "Holt tendencia amortiguada",
-    "variacion_lineal": "Modelo sobre variación mensual",
-    "log_variacion": "Modelo sobre log-variación mensual",
-}
-
-
-def _nombre_visible_candidato(codigo: Any) -> str:
-    """Nombre legible de un candidato del pool a partir de su codigo interno.
-
-    Los codigos "fourier_k1__<base>" y "seasonal_naive" no deben llegar al
-    informe del usuario (item 12, Prompt Calendario 04).
-    """
-    texto = str(codigo or "").strip()
-    if not texto:
-        return ""
-    if texto == "seasonal_naive":
-        return "Seasonal Naive (m=12)"
-    if texto.startswith("fourier_k1__"):
-        base = texto[len("fourier_k1__"):]
-        return f"Fourier K=1 + {_NOMBRE_VISIBLE_MODELO_BASE.get(base, base)}"
-    return _NOMBRE_VISIBLE_MODELO_BASE.get(texto, texto)
+# post-r1-metodologia-12-24, 20-08-2026 (Prompt Calendario 06, hallazgo 1 de
+# auditoria). `_nombre_visible_candidato` ya no duplica el mapeo aqui: usa la
+# fuente unica `nombre_visible_candidato` de servicio_proyeccion.py (que a su
+# vez lee CATALOGO_MODELOS_CANDIDATOS, el mismo catalogo de 21 candidatos).
+_nombre_visible_candidato = nombre_visible_candidato
 
 
 def _seccion_ficha(datos: DatosProyeccion) -> Seccion:

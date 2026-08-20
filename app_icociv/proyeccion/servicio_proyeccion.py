@@ -191,6 +191,20 @@ CATALOGO_MODELOS_CANDIDATOS[CANDIDATO_SEASONAL_NAIVE] = (
 )
 
 
+# post-r1-metodologia-12-24, 20-08-2026 (Prompt Calendario 06, hallazgo 1 de
+# auditoria). Fuente unica para traducir un codigo interno de candidato
+# ("fourier_k1__huber", "seasonal_naive", "drift", ...) a su nombre legible.
+# Los codigos internos NUNCA deben llegar a superficies visibles al usuario
+# (UI, HTML, DOCX, PDF); si siguen siendo utiles para CSV/trazabilidad
+# tecnica, ese uso no cambia.
+def nombre_visible_candidato(codigo: str | None) -> str:
+    texto = str(codigo or "").strip()
+    if not texto:
+        return ""
+    entrada = CATALOGO_MODELOS_CANDIDATOS.get(texto)
+    return entrada[0] if entrada else texto
+
+
 # ==============================
 # SELECCIÃ“N JERÃRQUICA
 # ==============================

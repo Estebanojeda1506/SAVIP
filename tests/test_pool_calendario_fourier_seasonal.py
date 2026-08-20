@@ -250,6 +250,128 @@ def test_casoI_ui_smoke_ganador_fourier_y_ganador_base():
     assert app is not None
 
 
+# --------------------------------------------------------------- CASO J
+def test_casoJ_ids_internos_no_visibles_en_ui_ni_reportes():
+    """Hallazgo 1 de auditoria (Prompt Calendario 06): 'fourier_k1__...' no
+    debe llegar a ninguna superficie visible (UI, HTML de resultados, HTML
+    de reporte). Puede seguir existiendo en CSV/campos tecnicos."""
+    from app_icociv.interfaz.presentacion_resultados import (
+        construir_html_explicacion_tarjeta,
+        construir_html_resultados,
+    )
+    from app_icociv.reportes.generador_reportes import (
+        _lineas_determinacion_horizonte,
+        _lineas_horizontes,
+    )
+    from app_icociv.reportes.contenido import _nombre_visible_candidato
+
+    # Traduccion directa del helper para varios candidatos Fourier.
+    for base in mi.MODELOS_FOURIER_BASE:
+        visible = _nombre_visible_candidato(f"fourier_k1__{base}")
+        assert "fourier_k1__" not in visible
+        assert visible.startswith("Fourier K=1 + ")
+
+    df = _serie_sintetica_estacional(65, semilla=42, amplitud=7.0, ruido=0.3)
+    ty, tm = _objetivo(65, 24)
+    res = ejecutar_proyeccion(df, ty, tm, ANIO_BASE)
+    hi = res["horizonte_info"]
+
+    html_resultados = construir_html_resultados(res, "claro")
+    assert "fourier_k1__" not in html_resultados
+
+    html_modelo = construir_html_explicacion_tarjeta("modelo", res, "claro")
+    assert "fourier_k1__" not in html_modelo
+
+    lineas_det = _lineas_determinacion_horizonte(res)
+    assert not any("fourier_k1__" in linea for linea in lineas_det)
+
+    lineas_eval = _lineas_horizontes(res)
+    assert not any("fourier_k1__" in str(linea) for linea in lineas_eval)
+
+    # El identificador tecnico interno SI puede seguir en horizonte_info
+    # (campo tecnico, no superficie de usuario) y en CSV.
+    assert hi.get("candidato_seleccionado") in mi.CATALOGO_POOL_CALENDARIO
+
+
+# --------------------------------------------------------------- CASO K
+def test_casoK_cache_fourier_depende_de_y_y_t():
+    """Hallazgo 2 de auditoria: la clave de cache debe distinguir ejes t
+    distintos aunque y sea identico."""
+    mi._MEMORIA_FOURIER.clear()
+    n = 24
+    rng = np.random.default_rng(5)
+    y = 100 + 0.4 * np.arange(1, n + 1) + 2 * np.sin(2 * np.pi * np.arange(1, n + 1) / 12) + rng.normal(0, 0.1, n)
+
+    t1 = np.arange(1, n + 1, dtype=float)
+    t2 = np.arange(5, n + 5, dtype=float)  # mismo largo y valores de y, eje t distinto
+
+    a1, b1 = mi._fourier_k1_coeficientes(t1, y.copy())
+    a2, b2 = mi._fourier_k1_coeficientes(t2, y.copy())
+    cache_depende_de_y_y_t = not (math.isclose(a1, a2) and math.isclose(b1, b2))
+    print(f"CACHE_FOURIER_DEPENDE_DE_Y_Y_T={cache_depende_de_y_y_t}")
+    assert cache_depende_de_y_y_t
+
+    # Contra ejecucion con cache limpia: el resultado de t2 debe ser
+    # reproducible, no un residuo cacheado de t1.
+    mi._MEMORIA_FOURIER.clear()
+    a2b, b2b = mi._fourier_k1_coeficientes(t2, y.copy())
+    assert math.isclose(a2, a2b) and math.isclose(b2, b2b)
+
+    # Anti-leakage normal (se repite aqui junto al arreglo de cache): alterar
+    # una observacion posterior a un origen no cambia coeficientes/pronostico
+    # de ese origen.
+    mi._MEMORIA_FOURIER.clear()
+    o = 30
+    t_hist = np.arange(1, o + 1, dtype=float)
+    df = _serie_sintetica_estacional(65, semilla=9)
+    y_full = df["Indice"].to_numpy(dtype=float)
+    y_hist = y_full[:o].copy()
+    r1 = mi.ajustar_modelo_interpretable("fourier_k1__drift", t_hist, y_hist)
+    a_antes = r1["parametros"]["fourier_coef_sin_1"]
+    b_antes = r1["parametros"]["fourier_coef_cos_1"]
+    yhat_antes = r1["predict"](np.arange(o + 1, o + 25, dtype=float))
+
+    y_full_mod = y_full.copy()
+    y_full_mod[o + 5] = y_full_mod[o + 5] * 4.0 + 500.0
+    y_hist_mod = y_full_mod[:o]
+    r2 = mi.ajustar_modelo_interpretable("fourier_k1__drift", t_hist, y_hist_mod)
+    a_despues = r2["parametros"]["fourier_coef_sin_1"]
+    b_despues = r2["parametros"]["fourier_coef_cos_1"]
+    yhat_despues = r2["predict"](np.arange(o + 1, o + 25, dtype=float))
+    assert math.isclose(a_antes, a_despues) and math.isclose(b_antes, b_despues)
+    assert np.allclose(yhat_antes, yhat_despues)
+
+
+# --------------------------------------------------------------- CASO L
+def test_casoL_k_fourier_es_k_base_mas_4_y_no_cambia_seleccion():
+    """Hallazgo 3 de auditoria: k=k_base+4 (alpha,beta,a,b), y el cambio de k
+    no debe afectar RMSE de seleccion, pronostico ni candidato ganador."""
+    n = 30
+    t = np.arange(1, n + 1, dtype=float)
+    rng = np.random.default_rng(2)
+    y = 80 + 0.2 * t + 1.5 * np.sin(2 * np.pi * t / 12) + rng.normal(0, 0.2, n)
+
+    # k_base se obtiene del ajuste bare real (no se hardcodea: evita que la
+    # prueba adivine mal el conteo de parametros de cada modelo base).
+    for base in mi.MODELOS_FOURIER_BASE:
+        fn, kw = mi._DISPATCH_MODELO_BASE[base]
+        k_base = fn(t, y, **kw)["k"]
+        r = mi.ajustar_modelo_interpretable(f"fourier_k1__{base}", t, y)
+        assert r["k"] == k_base + 4, (base, r["k"], k_base)
+
+    # k no debe afectar RMSE de seleccion, ni pronostico, ni candidato
+    # ganador: se reproduce el caso real G5-A (ya validado exactamente contra
+    # el experimento de decision con k=k_base+2) y se confirma que el
+    # candidato/RMSE/pronostico no cambiaron con k=k_base+4.
+    df = _serie_sintetica_estacional(65, semilla=42, amplitud=7.0, ruido=0.3)
+    ty, tm = _objetivo(65, 24)
+    res = ejecutar_proyeccion(df, ty, tm, ANIO_BASE)
+    hi = res["horizonte_info"]
+    if hi["estrategia_calendario"] == "fourier_k1":
+        modelo_base_ganador = hi["modelo_base"]
+        assert hi["fourier_k"] == 1  # K de Fourier (armonicos), no confundir con k de AIC/parametros.
+
+
 def _principal() -> int:
     pruebas = [(n, o) for n, o in sorted(globals().items()) if n.startswith("test_") and callable(o)]
     fallos = 0

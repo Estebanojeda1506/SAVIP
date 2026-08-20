@@ -24,6 +24,7 @@ import numpy as np
 import pandas as pd
 
 from app_icociv.persistencia.gestor_sesiones import sanitizar_nombre_archivo
+from app_icociv.proyeccion.servicio_proyeccion import nombre_visible_candidato
 from app_icociv.utilidades.nomenclatura_icociv import (
     nombre_tabla_icociv,
     ruta_sin_tabla,
@@ -971,9 +972,9 @@ def _lineas_factibilidad(factibilidad: dict[str, Any], resultado: dict[str, Any]
         # es fijo y el modelo se selecciona una sola vez sobre 1..24.
         f"Alcance máximo de proyección de SAVIP: {horizonte_info.get('alcance_maximo_proyeccion') or 'No identificado'} meses",
         f"Primer origen del backtesting (N0): {horizonte_info.get('n0_backtesting') or 'No identificado'}",
-        f"Modelo seleccionado: {horizonte_info.get('modelo_seleccionado') or 'No identificado'}",
+        f"Modelo seleccionado: {nombre_visible_candidato(horizonte_info.get('modelo_seleccionado')) or 'No identificado'}",
         f"RMSE OOS usado en la selección (1–24 meses): {horizonte_info.get('rmse_seleccion_oos') or 'No identificado'}",
-        f"Segundo modelo: {horizonte_info.get('modelo_segundo') or 'No aplica'}",
+        f"Segundo modelo: {nombre_visible_candidato(horizonte_info.get('modelo_segundo')) or 'No aplica'}",
         f"Explicación: {factibilidad.get('explicacion', resultado.get('explicacion', ''))}",
     ] + [f"{etiqueta}: {valor}" for etiqueta, valor in _filas_ajuste_calendario(resultado)]
     proyeccion_generada = bool(resultado.get("proyeccion_generada"))
@@ -1044,9 +1045,9 @@ def _lineas_horizontes(resultado: dict[str, Any]) -> list[str]:
         f"Horizonte solicitado: {info.get('horizonte_solicitado', resultado.get('horizonte_solicitado', ''))}",
         f"Alcance máximo de proyección de SAVIP: {info.get('alcance_maximo_proyeccion', '')} meses",
         f"Primer origen del backtesting (N0): {info.get('n0_backtesting', '')}",
-        f"Modelo seleccionado: {info.get('modelo_seleccionado', '')}",
+        f"Modelo seleccionado: {nombre_visible_candidato(info.get('modelo_seleccionado', ''))}",
         f"RMSE OOS usado en la selección (1–24 meses): {_formatear_numero(info.get('rmse_seleccion_oos'))}",
-        f"Segundo modelo: {info.get('modelo_segundo') or 'No aplica'}",
+        f"Segundo modelo: {nombre_visible_candidato(info.get('modelo_segundo')) or 'No aplica'}",
         f"RMSE OOS del segundo modelo: {_formatear_numero(info.get('rmse_segundo_oos'))}",
         f"Diferencia frente al segundo modelo (descriptiva, no prueba de significancia): "
         f"{_formatear_numero(info.get('diferencia_porcentual_segundo'))}%",
@@ -1084,9 +1085,9 @@ def _lineas_determinacion_horizonte(resultado: dict[str, Any]) -> list[str]:
         ),
         f"Horizonte solicitado: {info.get('horizonte_solicitado', resultado.get('horizonte_solicitado', ''))} meses.",
         f"Primer origen del backtesting (N0): {info.get('n0_backtesting', '')} observaciones.",
-        f"Modelo seleccionado: {info.get('modelo_seleccionado', '')}.",
+        f"Modelo seleccionado: {nombre_visible_candidato(info.get('modelo_seleccionado', ''))}.",
         f"RMSE OOS usado en la selección (1–24 meses): {_formatear_numero(info.get('rmse_seleccion_oos'))}.",
-        f"Segundo modelo: {info.get('modelo_segundo') or 'No aplica'}.",
+        f"Segundo modelo: {nombre_visible_candidato(info.get('modelo_segundo')) or 'No aplica'}.",
         f"RMSE OOS del segundo modelo: {_formatear_numero(info.get('rmse_segundo_oos'))}.",
         (
             "Consistencia metodológica: "

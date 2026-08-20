@@ -9,6 +9,7 @@ from typing import Any
 import pandas as pd
 
 from app_icociv.interfaz.estilos.constantes_visuales import paleta_tema
+from app_icociv.proyeccion.servicio_proyeccion import nombre_visible_candidato
 from app_icociv.utilidades.nomenclatura_icociv import nombre_tabla_icociv
 
 
@@ -266,13 +267,13 @@ def construir_html_explicacion_tarjeta(
         filas = [
             ("Alcance máximo de proyección de SAVIP", formatear_horizonte(info.get("alcance_maximo_proyeccion")), ""),
             ("Evidencia OOS común (W*)", _entero(info.get("w_estrella")) if info.get("w_estrella") is not None else NO_APLICA, ""),
-            ("Modelo seleccionado", info.get("modelo_seleccionado") or NO_APLICA, ""),
+            ("Modelo seleccionado", nombre_visible_candidato(info.get("modelo_seleccionado")) or NO_APLICA, ""),
             (
                 "RMSE OOS usado en la selección (1–24 meses)",
                 formatear_valor(info.get("rmse_seleccion_oos")),
                 "",
             ),
-            ("Segundo modelo", info.get("modelo_segundo") or NO_APLICA, ""),
+            ("Segundo modelo", nombre_visible_candidato(info.get("modelo_segundo")) or NO_APLICA, ""),
             (
                 "Diferencia frente al segundo modelo",
                 formatear_porcentaje(info.get("diferencia_porcentual_segundo"))
@@ -333,25 +334,15 @@ GLOSARIO_ESTADOS_HORIZONTE = (
 # post-r1-metodologia-12-24, 20-08-2026 (Prompt Calendario 04). Nombre legible
 # del modelo base: el codigo interno ("holt_amortiguado") no debe llegar a la
 # interfaz del usuario.
-_NOMBRE_VISIBLE_MODELO_BASE = {
-    "naive": "Naive último valor",
-    "drift": "Drift",
-    "lineal": "Lineal (OLS)",
-    "logaritmico": "Logarítmica temporal (OLS)",
-    "exponencial_log_lineal": "Exponencial/log-lineal",
-    "huber": "Huber (robusta)",
-    "holt_lineal": "Holt lineal",
-    "holt_amortiguado": "Holt tendencia amortiguada",
-    "variacion_lineal": "Modelo sobre variación mensual",
-    "log_variacion": "Modelo sobre log-variación mensual",
-}
-
-
+# post-r1-metodologia-12-24, 20-08-2026 (Prompt Calendario 06, hallazgo 1 de
+# auditoria). Ya no duplica el mapeo: usa la fuente unica
+# `nombre_visible_candidato` (servicio_proyeccion.py / CATALOGO_MODELOS_CANDIDATOS),
+# que tambien cubre los codigos base sin tratamiento calendario.
 def _nombre_visible_modelo_base(codigo: Any) -> str:
     texto = str(codigo or "").strip()
     if not texto or texto.lower() == "none":
         return ""
-    return _NOMBRE_VISIBLE_MODELO_BASE.get(texto, texto)
+    return nombre_visible_candidato(texto)
 
 
 def _bloque_glosario_estados() -> str:
@@ -683,13 +674,13 @@ def _tabla_horizonte_estadistico(proyeccion: dict[str, Any]) -> str:
         ("Alcance máximo de proyección de SAVIP", formatear_horizonte(info.get("alcance_maximo_proyeccion")), ""),
         ("Evidencia OOS común (W*)", _entero(info.get("w_estrella")) if info.get("w_estrella") is not None else NO_APLICA, ""),
         ("Primer origen del backtesting (N0)", _entero(info.get("n0_backtesting")) if info.get("n0_backtesting") is not None else NO_APLICA, ""),
-        ("Modelo seleccionado", info.get("modelo_seleccionado") or NO_APLICA, ""),
+        ("Modelo seleccionado", nombre_visible_candidato(info.get("modelo_seleccionado")) or NO_APLICA, ""),
         (
             "RMSE OOS usado en la selección (1–24 meses)",
             formatear_valor(info.get("rmse_seleccion_oos")),
             "",
         ),
-        ("Segundo modelo", info.get("modelo_segundo") or NO_APLICA, ""),
+        ("Segundo modelo", nombre_visible_candidato(info.get("modelo_segundo")) or NO_APLICA, ""),
         (
             "Diferencia frente al segundo modelo",
             formatear_porcentaje(info.get("diferencia_porcentual_segundo"))

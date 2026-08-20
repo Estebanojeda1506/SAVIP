@@ -113,19 +113,35 @@ def test_manual_admisible_identifica_origen_y_h7() -> None:
     assert principal["estado"] == "proyeccion_tecnica"
 
 
-def test_horizonte_solo_escenario_no_se_llama_proyeccion_tecnica() -> None:
-    """H-4 residual, 18-08-2026 (reauditoria dirigida V-CODEX-R2 residual).
-    El estado intermedio "escenario" se retiro de
-    `_estructurar_resultado_horizontes`: con el evaluador real,
-    `permitido_como_escenario == permitido_para_proyeccion_tecnica` siempre
-    (ver su comentario H-4 residual), de modo que esa rama nunca se
-    ejecutaba. Este test sigue forzando con datos sinteticos la combinacion
-    permitido_como_escenario=True / permitido_para_proyeccion_tecnica=False
-    -que no ocurre con datos reales, pero que la funcion todavia acepta como
-    entrada- para verificar la garantia que le da nombre al test: un
-    horizonte que no es tecnico nunca se etiqueta como "proyeccion_tecnica".
-    Hoy esa garantia se cumple devolviendo "no_admisible" en lugar del
-    estado retirado."""
+def test_no_admisible_nunca_se_llama_proyeccion_tecnica() -> None:
+    """post-r1-metodologia-12-24, 20-08-2026 (Prompt Calendario 06, hallazgo 4
+    de auditoria). Bajo la metodologia rectangular N0=12/H=24,
+    `_estructurar_resultado_horizontes` ya no deriva `estado` de una
+    clasificacion por horizonte ("tecnico"/"escenario"/"no_viable"): lo toma
+    directamente del binario `proyeccion_generada` que entrega el motor
+    (H-4 residual). La version anterior de esta prueba forzaba
+    `generado=True` junto con banderas sinteticas de "solo escenario"
+    esperando un tercer estado que ya no existe; con `generado=True` el
+    resultado real y correcto es "proyeccion_tecnica" (no hay bug: la
+    prueba asumia una rama retirada). La garantia vigente y equivalente es
+    mas simple: `generado=False` nunca produce "proyeccion_tecnica"."""
+    for solicitado, origen in ((18, "predeterminado"), (15, "manual")):
+        principal = _resultado(
+            solicitado,
+            tecnico_hasta=12,
+            escenario_hasta=18,
+            primer_no_viable=19,
+            generado=False,
+            origen=origen,
+        )["resultado_horizonte_solicitado"]
+        assert principal["estado"] != "proyeccion_tecnica"
+        assert principal["estado"] == "no_admisible"
+        assert principal["accion"] == "negar"
+        assert "advertencia" not in principal
+
+    # Y el complemento: generado=True siempre produce "proyeccion_tecnica",
+    # sin importar las banderas por-horizonte sinteticas (ya no gobiernan
+    # nada bajo la metodologia rectangular vigente).
     for solicitado, origen in ((18, "predeterminado"), (15, "manual")):
         principal = _resultado(
             solicitado,
@@ -135,10 +151,8 @@ def test_horizonte_solo_escenario_no_se_llama_proyeccion_tecnica() -> None:
             generado=True,
             origen=origen,
         )["resultado_horizonte_solicitado"]
-        assert principal["estado"] != "proyeccion_tecnica"
-        assert principal["estado"] == "no_admisible"
-        assert principal["accion"] == "negar"
-        assert "advertencia" not in principal
+        assert principal["estado"] == "proyeccion_tecnica"
+        assert principal["accion"] == "permitir"
 
 
 def test_h32_no_admisible_no_expone_proyeccion_y_marca_no_evaluados() -> None:
@@ -166,13 +180,28 @@ def test_restriccion_no_hace_pasar_h12_como_resultado_de_h18() -> None:
 
 
 def test_horizonte_manual_invalido() -> None:
-    for valor in ("", "texto", 0, -1, 1.5, None, 61):
+    # post-r1-metodologia-12-24, 20-08-2026 (Prompt Calendario 06, hallazgo 4
+    # de auditoria). Desde el Prompt 13, `validar_horizonte_solicitado`
+    # distingue DOS causas de rechazo con mensajes distintos: "no es un
+    # entero positivo" (no numerico, cero, negativo, no entero) frente a
+    # "es un entero positivo pero excede el alcance 1..24" (25 en adelante).
+    # Esta prueba comprobaba un unico mensaje para ambos casos; se separa
+    # segun la semantica vigente.
+    for valor in ("", "texto", 0, -1, 1.5, None):
         try:
             validar_horizonte_solicitado(valor)
         except ValueError as exc:
             assert "entero positivo" in str(exc)
         else:
             raise AssertionError(f"Se aceptó un horizonte inválido: {valor!r}")
+    for valor in (25, 45, 61):
+        try:
+            validar_horizonte_solicitado(valor)
+        except ValueError as exc:
+            assert "1 y 24 meses" in str(exc)
+            assert "entero positivo" not in str(exc)
+        else:
+            raise AssertionError(f"Se aceptó un horizonte fuera de alcance: {valor!r}")
 
 
 def test_evaluacion_es_mensual_continua() -> None:
@@ -180,57 +209,32 @@ def test_evaluacion_es_mensual_continua() -> None:
     assert horizontes[:12] == tuple(range(1, 13))
 
 
-def test_misma_serie_h12_y_h45_conserva_auditoria_global() -> None:
+def test_h45_se_rechaza_explicitamente_h12_se_genera_normalmente() -> None:
+    """post-r1-metodologia-12-24, 20-08-2026 (Prompt Calendario 06, hallazgo 4
+    de auditoria). Bajo la metodologia vigente H_OPERATIVO_MAX=24: h=45 no
+    es un horizonte "generado con auditoria global comparable" (esa nocion
+    triangular ya no existe), es un horizonte QUE NO SE PUEDE SOLICITAR. La
+    prueba anterior llamaba `ejecutar_proyeccion` con un objetivo a 45 meses
+    esperando que generara resultado; hoy eso viola 1<=h<=24 y debe
+    rechazarse explicitamente antes de intentar generar nada. h=12, sobre la
+    misma serie, sigue funcionando con normalidad."""
     periodos = [f"{2021 + i // 12}_{i % 12 + 1}" for i in range(61)]
     serie = pd.DataFrame(
         {"Periodo": periodos, "Indice": [100 + 0.25 * i + 0.02 * ((i % 7) - 3) for i in range(61)]}
     )
+    # Ultimo periodo de la serie: 2021 + 60//12 = 2026, mes 60%12+1 = 1 -> 2026_1.
+    # 2027_1 = 12 meses despues (h=12, valido). 2029_10 = 45 meses despues (h=45, invalido).
     h12 = ejecutar_proyeccion(serie, 2027, 1, 2021, origen_horizonte="predeterminado")
-    h45 = ejecutar_proyeccion(serie, 2029, 10, 2021, origen_horizonte="manual")
-    a = h12["analisis_horizontes_completo"]
-    b = h45["analisis_horizontes_completo"]
-    for campo in (
-        "horizontes_evaluados",
-        "horizonte_maximo_recomendado",
-        "horizonte_maximo_permitido_como_escenario",
-        "primer_horizonte_no_viable",
-        "horizontes_no_recomendables",
-        "horizontes_no_evaluados",
-        "razon_parada",
-        "horizonte_maximo_evaluable_por_datos",
-        "razones",
-        "advertencias",
-        "advertencias_por_horizonte",
-        "mensaje",
-        "mensaje_ui",
-        "mensaje_informe",
-    ):
-        assert a[campo] == b[campo]
-    claves = (
-        "horizonte",
-        "estado",
-        "decision",
-        "clasificacion",
-        "permitido_para_proyeccion_tecnica",
-        "permitido_como_escenario",
-        "no_recomendable",
-        "modelo_evaluado",
-        "rmse",
-        "mae",
-        "mape",
-        "smape",
-        "mase",
-        "ic95_relativo",
-        "razon_decision",
-    )
-    assert [
-        {clave: fila.get(clave) for clave in claves} for fila in a["tabla_horizontes"]
-    ] == [
-        {clave: fila.get(clave) for clave in claves} for fila in b["tabla_horizontes"]
-    ]
-    assert a["trazabilidad"]["firma_serie_sha256"] == b["trazabilidad"]["firma_serie_sha256"]
     assert h12["resultado_horizonte_solicitado"]["horizonte_solicitado"] == 12
-    assert h45["resultado_horizonte_solicitado"]["horizonte_solicitado"] == 45
+    assert h12["resultado_horizonte_solicitado"]["proyeccion_generada"] is True
+    assert h12["resultado_horizonte_solicitado"]["estado"] == "proyeccion_tecnica"
+
+    try:
+        ejecutar_proyeccion(serie, 2029, 10, 2021, origen_horizonte="manual")
+    except ValueError as exc:
+        assert "1 y 24 meses" in str(exc)
+    else:
+        raise AssertionError("h=45 debio rechazarse explicitamente (H_OPERATIVO_MAX=24)")
 
 
 def test_maximos_se_derivan_de_clasificaciones_y_no_del_limite_de_grilla() -> None:
@@ -280,7 +284,19 @@ def test_limite_evaluable_se_informa_sin_convertirlo_en_validez_absoluta() -> No
     assert info["horizontes_no_evaluados"] == [6, 7, 8, 9, 10]
 
 
-def test_maximo_evaluado_20_no_sustituye_recomendado_ni_escenario() -> None:
+def test_maximo_evaluado_20_es_descriptivo_de_la_funcion_retirada() -> None:
+    """post-r1-metodologia-12-24, 20-08-2026 (Prompt Calendario 06, hallazgo 4
+    de auditoria). `determinar_horizonte_maximo_estadistico` sigue definida
+    (funcion muerta: no la llama ningun camino productivo, ver comentarios
+    en analisis_series.py y presentacion_resultados.py), y esta prueba
+    conserva la comprobacion de sus propios campos, igual que sus 5
+    hermanas en este archivo. Lo que se retira es la comparacion contra
+    `construir_html_explicacion_tarjeta("maximo", ...)` y
+    `_lineas_determinacion_horizonte(...)`: esas dos funciones de UI/reporte
+    ya NO leen esta estructura triangular (leen `horizonte_info` rectangular
+    real, ver test_maximo_tarjeta_usa_alcance_operativo_vigente abajo), asi
+    que comparar sus textos contra vocabulario "horizonte maximo
+    recomendado" prueba una integracion que ya no existe."""
     evaluaciones = [_evaluacion(h, "tecnico") for h in range(1, 14)]
     for h in range(14, 21):
         fila = _evaluacion(h, "no_viable")
@@ -307,18 +323,43 @@ def test_maximo_evaluado_20_no_sustituye_recomendado_ni_escenario() -> None:
             "horizonte_maximo_evaluable_por_datos": 20,
         },
     )
-    resultado = {"horizonte_info": info, "analisis_horizontes_completo": info}
-    html = construir_html_explicacion_tarjeta("maximo", resultado, "oscuro")
-    informe = "\n".join(_lineas_determinacion_horizonte(resultado))
-
     assert info["horizonte_maximo_evaluado"] == 20
     assert info["horizonte_maximo_recomendado"] == 13
     assert info["horizonte_maximo_permitido_como_escenario"] == 0
     assert info["maximo_recomendado_es_limite_observado"] is False
-    assert "13 meses" in html
-    assert "20 meses" in html
-    assert "No identificado" in html
-    assert "no debe interpretarse como horizonte máximo recomendado" in informe
+
+
+def test_maximo_tarjeta_usa_alcance_operativo_vigente() -> None:
+    """post-r1-metodologia-12-24, 20-08-2026 (Prompt Calendario 06, hallazgo 4
+    de auditoria). Reemplazo de semantica vigente para la parte de la
+    prueba anterior que verificaba el contenido de la tarjeta "maximo": bajo
+    N0=12/H=24 esa tarjeta muestra el alcance operativo fijo (24 meses), W*
+    y el candidato/RMSE de seleccion, no un "horizonte maximo recomendado"
+    triangular. Tambien confirma que los nombres de candidato llegan
+    traducidos (hallazgo 1 de esta misma auditoria), no como
+    "fourier_k1__...".
+    """
+    resultado = {
+        "proyeccion": {
+            "horizonte_info": {
+                "alcance_maximo_proyeccion": 24,
+                "w_estrella": 30,
+                "modelo_seleccionado": "fourier_k1__holt_amortiguado",
+                "rmse_seleccion_oos": 4.34,
+                "modelo_segundo": "fourier_k1__drift",
+                "diferencia_porcentual_segundo": 12.5,
+            },
+            "resultado_horizonte_solicitado": {"horizonte_solicitado": 12},
+        }
+    }
+    html = construir_html_explicacion_tarjeta("maximo", resultado, "claro")
+    assert "Alcance máximo de proyección de SAVIP" in html
+    assert "24 meses" in html
+    assert "Fourier K=1 + Holt tendencia amortiguada" in html
+    assert "Fourier K=1 + Drift" in html
+    assert "fourier_k1__" not in html
+    for retirado in ("horizonte máximo recomendado", "máximo estadístico", "escenario"):
+        assert retirado not in html.lower()
 
 
 def test_20_puede_ser_maximo_recomendado_si_h20_es_tecnico() -> None:
