@@ -768,15 +768,29 @@ def _matriz_rectangular_12_24(
     `entrenamiento_inicial` con el que se invoco el backtesting -la propiedad
     verificada en los Prompts 08/09-, de modo que basta filtrar cada horizonte
     por `Observaciones_entrenamiento` (=origen) para obtener el rectangulo.
+
+    post-r1-metodologia-12-24, 19-08-2026 (Prompt 11 - semantica temporal). Los
+    modelos reciben el INDICE_TEMPORAL_DEL_MODELO (tau = 1..n, posicion
+    secuencial dentro de la serie), no el "t" calendario que usa `anio_base`
+    para ordenar/etiquetar. `_preparar_serie` (backtesting.py) reutiliza una
+    columna "t" si ya existe en el DataFrame en vez de recalcularla desde
+    "Periodo"+anio_base; se aprovecha esa puerta para pasarle tau ya
+    construido. `anio_base` se conserva en la firma solo por compatibilidad:
+    ya no participa en la construccion del eje temporal del modelo aqui.
     """
     n = int(len(serie_trabajo))
     w_estrella = n - N0_BACKTESTING - H_OPERATIVO_MAX + 1
     if w_estrella < 1:
         return {"suficiente": False, "n": n, "w_estrella": w_estrella}
 
+    tau = serie_trabajo["t"].to_numpy(dtype=float)
+    tau = tau - tau.min() + 1.0
+    serie_para_modelos = serie_trabajo[["Periodo", "Indice"]].copy()
+    serie_para_modelos["t"] = tau
+
     horizontes = tuple(range(1, H_OPERATIVO_MAX + 1))
     backtesting_comparativo = ejecutar_backtesting_comparativo(
-        serie_trabajo[["Periodo", "Indice"]],
+        serie_para_modelos,
         modelos=modelos,
         horizontes=horizontes,
         anio_base=anio_base,
@@ -994,6 +1008,16 @@ def _ejecutar_proyeccion_base(
     t_obs = serie_trabajo["t"].to_numpy(dtype=float)
     y_obs = serie_trabajo["Indice"].to_numpy(dtype=float)
     t_ultimo = int(np.max(t_obs))
+    # post-r1-metodologia-12-24, 19-08-2026 (Prompt 11 - semantica temporal).
+    # INDICE_TEMPORAL_DEL_MODELO: tau = 1..n, posicion secuencial dentro de la
+    # serie (tau_i = i). Distinto de "t" (calendario, ancla en anio_base -que
+    # a su vez es el PERIODO_INICIAL_DE_LA_SERIE, enero de 2021, NO el periodo
+    # base economico del indice ICOCIV, diciembre de 2021=100-, se usa para
+    # ordenar, validar continuidad y etiquetar fechas). Los modelos de
+    # forecasting se ajustan sobre tau, no sobre t ni sobre ningun periodo
+    # base economico. Ver auditoria en tests/test_semantica_temporal.py.
+    tau_obs = t_obs - t_obs.min() + 1.0
+    tau_ultimo = float(tau_obs[-1])
     t_solicitado = (int(year_proj) - anio_base) * 12 + (int(month_proj) - 1)
     periodo_solicitado = f"{int(year_proj)}_{int(month_proj)}"
     if t_solicitado <= t_ultimo:
@@ -1044,7 +1068,7 @@ def _ejecutar_proyeccion_base(
         validacion_serie=validacion_serie,
         outliers=outliers,
     )
-    candidatos = ajustar_modelos_candidatos(t_obs, y_obs, modelos=modelos_evaluados)
+    candidatos = ajustar_modelos_candidatos(tau_obs, y_obs, modelos=modelos_evaluados)
 
     matriz = _matriz_rectangular_12_24(serie_trabajo, modelos_evaluados, anio_base)
     if not matriz.get("suficiente"):
@@ -1231,13 +1255,16 @@ def _ejecutar_proyeccion_base(
     last_obs = float(y_obs[-1])
 
     # Reajuste UNICO con toda la serie historica (ya en `modelo`, ajustado
-    # arriba sobre t_obs/y_obs completos) y UNA sola trayectoria interna de
+    # arriba sobre tau_obs/y_obs completos) y UNA sola trayectoria interna de
     # H_OPERATIVO_MAX meses (item 8). El horizonte solicitado NUNCA reajusta ni
     # reselecciona: solo extrae el segmento correspondiente de esta trayectoria
     # (item 9), de modo que pedir 6, 12, 17 o 24 meses da el mismo modelo, el
     # mismo RMSE de seleccion y los mismos valores en los meses comunes.
-    t_futuro_24 = np.arange(t_ultimo + 1, t_ultimo + H_OPERATIVO_MAX + 1, dtype=float)
-    trayectoria_24_meses = proyectar_modelo(modelo, t_futuro_24, forzar_desde=None)
+    # tau_futuro = n+1..n+24 (INDICE_TEMPORAL_DEL_MODELO), coherente con el
+    # ajuste sobre tau_obs; t_futuro (calendario) se mantiene aparte solo para
+    # etiquetar el periodo de salida (t_permitido/periodo_proj, mas abajo).
+    tau_futuro_24 = np.arange(tau_ultimo + 1, tau_ultimo + H_OPERATIVO_MAX + 1, dtype=float)
+    trayectoria_24_meses = proyectar_modelo(modelo, tau_futuro_24, forzar_desde=None)
     y_futuro = np.asarray(trayectoria_24_meses[:horizonte_permitido], dtype=float)
 
     calendario = _ajustar_salto_anual(

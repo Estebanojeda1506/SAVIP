@@ -13,6 +13,23 @@ from app_icociv.estadistica.criterios import MIN_OBS_JARQUE_BERA
 # ==============================
 # CONSTANTES
 # ==============================
+#: post-r1-metodologia-12-24, 19-08-2026 (Prompt 11 - semantica temporal).
+#: ANIO_BASE es el PERIODO_INICIAL_DE_LA_SERIE: el primer mes desde el que
+#: SAVIP tiene historia ICOCIV desplegada (enero de 2021), usado por
+#: `periodo_a_t`/`t_a_periodo` para anclar el eje "t" calendario que ordena
+#: observaciones, valida continuidad mensual y etiqueta fechas.
+#:
+#: NO es el PERIODO_BASE_DEL_INDICE: la referencia economica propia del
+#: ICOCIV (diciembre de 2021 = 100), que pertenece a la interpretacion del
+#: indice, no a la posicion temporal de las observaciones, y que este modulo
+#: no modela (ver `app_icociv/servicios/actualizacion_icociv.py` y
+#: `contenido_empalme.py`, que manejan "periodo_base"/"I0" como conceptos
+#: aparte, del empalme ICCP-ICOCIV, sin relacion con esta constante).
+#:
+#: Tampoco es el INDICE_TEMPORAL_DEL_MODELO (tau = 1..n) que usan los modelos
+#: de forecasting: los modelos se ajustan sobre una posicion secuencial local
+#: dentro de la serie (`servicio_proyeccion._matriz_rectangular_12_24`,
+#: `_ejecutar_proyeccion_base`), no directamente sobre "t"/ANIO_BASE.
 ANIO_BASE: int = 2021
 NOMBRE_HOJA: str = "Anexo 16"
 

@@ -560,6 +560,14 @@ def _ajustar_lineal(t: np.ndarray, y: np.ndarray) -> dict[str, Any]:
 
 
 def _ajustar_logaritmico(t: np.ndarray, y: np.ndarray) -> dict[str, Any]:
+    # post-r1-metodologia-12-24, 19-08-2026 (Prompt 11 - semantica temporal).
+    # `t` aqui es el INDICE_TEMPORAL_DEL_MODELO (tau=1..n dentro de la
+    # ventana de entrenamiento), no un "t" calendario anclado en ANIO_BASE ni
+    # el periodo base economico del ICOCIV. Con tau>=1 desde el llamador,
+    # `desplazamiento` siempre evalua a 0 (min(t)=1 en toda ventana walk-
+    # forward expansiva desde el origen de la serie); se conserva la formula
+    # -no solo el caso feliz- porque sigue siendo la salvaguarda correcta si
+    # algun llamador futuro pasa un `t` que no arranque exactamente en 1.
     desplazamiento = max(0.0, 1.0 - float(np.min(t)))
     X = np.log(t.reshape(-1, 1) + desplazamiento)
     model = LinearRegression()
