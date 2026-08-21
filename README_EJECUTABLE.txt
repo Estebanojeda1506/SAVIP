@@ -1,6 +1,6 @@
 ===============================================================================
 SAVIP - Sistema de Analisis de Variaciones de Precios
-Version 0.3.0-rc3  (candidata de revision interna - NO DISTRIBUIR)
+Version 1.0.0
 ===============================================================================
 
 QUE ES ESTO
@@ -64,9 +64,6 @@ QUE VERSION TENGO
 
 AVISOS
 -------------------------------------------------------------------------------
-- Esta es una version candidata (release candidate) destinada exclusivamente a
-  revision interna. NO es la version final y NO debe distribuirse.
-
 - El ejecutable no esta firmado digitalmente. Windows SmartScreen o algunos
   antivirus pueden advertir sobre el. Es un comportamiento normal para
   aplicaciones sin firma; la firma digital esta prevista como mejora futura.
@@ -81,7 +78,7 @@ AVISOS
 - Para verificar la integridad de la descarga compare el SHA-256 del archivo
   ZIP con el contenido del archivo .sha256 que lo acompana:
 
-      Get-FileHash -Path SAVIP-0.3.0-rc3-windows.zip -Algorithm SHA256
+      Get-FileHash -Path SAVIP-1.0.0-windows.zip -Algorithm SHA256
 
 
 ===============================================================================

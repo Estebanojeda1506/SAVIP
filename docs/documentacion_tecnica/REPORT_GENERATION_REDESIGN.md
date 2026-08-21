@@ -179,5 +179,5 @@ No hace falta tocar los renderizadores: entienden los bloques, no las secciones.
 
 ## Ver también
 
-- `docs/claude/REPORT_CONTENT_MATRIX.md` — qué sección aparece en cada tipo.
-- `docs/claude/REPORT_TEST_PLAN.md` — qué comprueba cada prueba y qué no.
+- `docs/documentacion_tecnica/REPORT_CONTENT_MATRIX.md` — qué sección aparece en cada tipo.
+- `docs/documentacion_tecnica/REPORT_TEST_PLAN.md` — qué comprueba cada prueba y qué no.

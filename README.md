@@ -143,7 +143,7 @@ automáticamente la matriz publicada en el documento y
 | `documentacion_latex/LEEME.md` | Índice y estado de cada documento |
 | `docs/referencias/` | Matriz de referencias y manifiesto de fuentes externas |
 | `docs/mapa_reorganizacion_modulos.md` | Mapa técnico de módulos |
-| `docs/claude/` | Documentación técnica: arquitectura, mapa de módulos, métodos estadísticos, empalme, pruebas, empaquetado y sistema visual |
+| `docs/documentacion_tecnica/` | Documentación técnica: arquitectura, mapa de módulos, métodos estadísticos, empalme, pruebas, empaquetado y sistema visual |
 | `MANIFIESTO_REPOSITORIO.md` | Qué contiene este repositorio y qué se dejó fuera |
 
 El documento final se compila desde su carpeta con `latexmk`, que decide por sí

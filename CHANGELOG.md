@@ -9,6 +9,15 @@ leen de allí.
 
 ---
 
+## [1.0.0] — 20 de agosto de 2026
+
+Primera versión estable de SAVIP. Incluye el módulo de Proyecciones ICOCIV
+(catálogo de 21 candidatos, N0=12, H=24, backtesting rectangular, un modelo
+seleccionado por serie, horizonte operativo de 1 a 24 meses), el módulo de
+Empalme ICCP–ICOCIV (con proyección de fecha futura acotada al mismo
+horizonte de 24 meses), generación de reportes DOCX/PDF/CSV, y la
+optimización de tiempos de cálculo del motor de proyecciones.
+
 ## [0.3.0-rc3] — 30 de julio de 2026
 
 Versión candidata que atiende los hallazgos confirmados por la reauditoría
@@ -112,7 +121,7 @@ cambia es la serie de siete observaciones, que pasa de `No seleccionado / h=0` a
 `Lineal (OLS) / 110,5000 / h=1`: es exactamente la remediación de P0-B. Ninguna
 cifra se movió por efecto de las otras tres.
 
-Se sincronizaron además la tesis, `docs/claude/04_STATISTICAL_METHODS.md`,
+Se sincronizaron además la tesis, `docs/documentacion_tecnica/04_STATISTICAL_METHODS.md`,
 `CLAUDE.md` y el inventario de criterios, que describían como vigentes mecanismos
 retirados. El documento compila en 154 páginas sin errores ni referencias
 indefinidas.
@@ -494,7 +503,7 @@ Primera distribución ejecutable para Windows, destinada a validación interna.
   título y en el diálogo «Acerca de».
 - `requirements-build.txt` con las dependencias exclusivas de compilación.
 - `README_EJECUTABLE.txt` para el usuario final de la distribución.
-- Guía de compilación en `docs/claude/EXE_BUILD_GUIDE.md`.
+- Guía de compilación en `docs/documentacion_tecnica/EXE_BUILD_GUIDE.md`.
 
 ### Cambiado
 
@@ -515,7 +524,7 @@ Primera distribución ejecutable para Windows, destinada a validación interna.
   de PyInstaller. Falta definir un icono institucional autorizado.
 - La prueba en un equipo Windows completamente limpio (sin Python ni entorno de
   desarrollo) está pendiente de ejecución por parte del responsable; la lista de
-  comprobación está en `docs/claude/EXE_BUILD_GUIDE.md`.
+  comprobación está en `docs/documentacion_tecnica/EXE_BUILD_GUIDE.md`.
 
 ### Pendiente
 
@@ -537,4 +546,4 @@ Primera distribución ejecutable para Windows, destinada a validación interna.
 7. Probar la distribución generada.
 8. Ejecutar `.\scripts\package_release.ps1` para el ZIP y su checksum.
 
-El procedimiento completo está en `docs/claude/EXE_BUILD_GUIDE.md`.
+El procedimiento completo está en `docs/documentacion_tecnica/EXE_BUILD_GUIDE.md`.

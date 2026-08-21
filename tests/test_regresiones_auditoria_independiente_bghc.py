@@ -25,7 +25,7 @@ Referencias: `06_REMEDIACIONES/CODEX_FINAL/04_P0C_RETIRO.md`,
 
 Ejecucion directa, sin pytest:
 
-    python tests/test_post_codex_bghc.py
+    python tests/test_regresiones_auditoria_independiente_bghc.py
 """
 from __future__ import annotations
 

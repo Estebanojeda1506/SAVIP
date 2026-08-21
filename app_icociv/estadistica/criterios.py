@@ -651,7 +651,7 @@ CRITERIOS_ESTADISTICOS: tuple[CriterioEstadistico, ...] = (
         "hueco no se oculta: se informa en `primer_horizonte_no_viable` y el horizonte fallido "
         "sigue marcado como no permitido.",
         "Retirado. Guardado conductualmente en tests/test_cierre_metodologico.py y "
-        "tests/test_post_codex_bghc.py (H1-H3).",
+        "tests/test_regresiones_auditoria_independiente_bghc.py (H1-H3).",
     ),
     CriterioEstadistico(
         "C-ALC-003",

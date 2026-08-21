@@ -77,4 +77,4 @@ Las cuatro son versiones de la **misma** guía académica. La vigente es
 - No editar nada dentro de `historico/`.
 - No crear copias de un documento vigente en otra carpeta; versionar por Git.
 - No mover `documento_tecnico_icociv_iccp/`: su ruta está fijada en `CLAUDE.md`
-  y en `docs/claude/`.
+  y en `docs/documentacion_tecnica/`.

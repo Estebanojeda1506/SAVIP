@@ -15,7 +15,7 @@ Fecha del export: 18 de agosto de 2026. Versión: ver `VERSION`.
 | `ESENCIAL_EJECUCION` | `aplicacion.py`, `app_icociv/` (incluidos los recursos de interfaz y `iccp_historico.json`), `VERSION` |
 | `ESENCIAL_DEPENDENCIAS` | `requirements.txt`, `requirements-build.txt`, `requirements-lock.txt` |
 | `ESENCIAL_REPRODUCIBILIDAD` | `tests/`, `pruebas/`, `packaging/`, `scripts/`, `auditoria_academica/`, `.gitignore`, `.gitattributes` |
-| `ESENCIAL_DOCUMENTACION_FINAL` | `README.md`, `README_EJECUTABLE.txt`, `CHANGELOG.md`, `documentacion_latex/` (seis documentos vigentes), `docs/claude/` (documentación técnica), `docs/referencias/`, `docs/auditoria_criterios_estadisticos.md`, `docs/mapa_reorganizacion_modulos.md`, este manifiesto |
+| `ESENCIAL_DOCUMENTACION_FINAL` | `README.md`, `README_EJECUTABLE.txt`, `CHANGELOG.md`, `documentacion_latex/` (seis documentos vigentes), `docs/documentacion_tecnica/` (documentación técnica), `docs/referencias/`, `docs/auditoria_criterios_estadisticos.md`, `docs/mapa_reorganizacion_modulos.md`, este manifiesto |
 
 ## Qué se dejó fuera, y por qué
 
@@ -29,7 +29,7 @@ atribución de terceros.
 | Anexos de datos del DANE (`*.xlsb`) y del ICCP (`*.xlsx`), documentos institucionales de terceros (`EQUIVALENCIA_ICCP/`, `Anexo ICCP dic 2021/`) | Datos y documentos de terceros; se obtienen de la publicación oficial. Ya excluidos por `.gitignore` desde el 29-jul-2026 |
 | `referencias_bibliograficas/` (PDF de artículos citados) | Material de terceros con derechos de autor; la bibliografía sí se conserva en cada `referencias.bib` y en `docs/referencias/` |
 | Artefactos de remediación y auditoría (`06_REMEDIACIONES/`, `15_PRUEBAS_ROJAS/`, `ESTADO_SESION.md`, `SAVIP_AUDITORIA_*`, `docs/remediacion_*`, `auditoria_horizonte_20.md`) | Historia de proceso ya superada; el resultado vive en el código, las pruebas y el documento |
-| Andamiaje de asistencia (`.claude/`, `.codex/`, `.agents/`, `.specify/`, `CLAUDE.md`, prompts, notas de sesión y planes ya ejecutados de `docs/claude/`) | No es código ni documentación del producto |
+| Andamiaje de asistencia (`.claude/`, `.codex/`, `.agents/`, `.specify/`, `CLAUDE.md`, prompts, notas de sesión y planes ya ejecutados de `docs/documentacion_tecnica/`) | No es código ni documentación del producto |
 | Salidas y entornos generados (`build/`, `dist/`, `release/`, `.venv-build/`, `logs/`, `tmp/`, `output/`, `reportes_generados/`, `sesiones/`, `__pycache__/`) | Se regeneran; no son fuentes |
 | Comprimidos y respaldos (`*.zip`) | Artefactos de entrega, no fuentes |
 | `documentacion_latex/historico/` y documentación superseded (`documentacion/`, `legado/`, `anexos anteproyecto/`, `pruebas app/`) | Versiones anteriores, explícitamente no vigentes |
