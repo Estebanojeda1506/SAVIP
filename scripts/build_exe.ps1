@@ -196,7 +196,6 @@ Compilado: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
 Python: $versionPython
 Modo: $(if ($Diagnostico) { "diagnostico (consola visible)" } else { "distribucion" })
 Dependencias: requirements-lock.txt verificado version a version antes de compilar
-Naturaleza: ejecutable temporal de revision, NO DISTRIBUIR
 "@
 Set-Content -Path (Join-Path $destino "VERSION.txt") -Value $infoVersion -Encoding utf8
 
