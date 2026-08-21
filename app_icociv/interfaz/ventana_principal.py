@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
@@ -199,6 +199,7 @@ class VentanaPrincipal(QMainWindow):
         super().__init__()
         self.controlador = ControladorPrincipal()
         self.trabajador: TrabajadorFuncion | None = None
+        self._trabajador_empalme: TrabajadorFuncion | None = None
         self.usuario_actual = ""
         self.nombre_sesion_actual: str | None = None
         self.sesion_pendiente: dict[str, Any] | None = None
@@ -574,7 +575,7 @@ class VentanaPrincipal(QMainWindow):
             self.grupo_archivo, self.grupo_parametros, self.boton_ejecutar
         )
         self.widget_empalme = WidgetEmpalmeICCPICOCIV()
-        self.widget_empalme.configurar_proyeccion_icociv(self._ejecutar_proyeccion_para_empalme)
+        self.widget_empalme.configurar_proyeccion_icociv(self._ejecutar_proyeccion_para_empalme_async)
 
         self.pantalla_inicio = PantallaInicio(VERSION, self.tema_actual)
         self.pantalla_inicio.agregar_acceso(
@@ -1320,21 +1321,47 @@ class VentanaPrincipal(QMainWindow):
         self.etiqueta_estado.setText("Proyección ejecutada correctamente.")
         self.lbl_dashboard_estado.setText("Análisis actualizado correctamente")
 
-    def _ejecutar_proyeccion_para_empalme(self, seleccion: dict[str, Any], anio: int, mes: int) -> dict[str, Any]:
+    def _ejecutar_proyeccion_para_empalme_async(
+        self,
+        seleccion: dict[str, Any],
+        anio: int,
+        mes: int,
+        al_terminar: Callable[[dict[str, Any] | None, str | None], None],
+    ) -> None:
+        """Ejecuta la proyección para Empalme en segundo plano.
+
+        `_ejecutar_proyeccion_para_empalme` (sincrona, en el hilo principal)
+        mostraba el velo de carga pero lo dejaba congelado durante el calculo:
+        `QApplication.processEvents()` procesa la cola de eventos UNA vez antes
+        de bloquear, no mientras el motor estadistico corre, asi que la barra
+        indeterminada del velo no podia seguir animandose (el hilo que la
+        pintaria estaba ocupado calculando). Se reutiliza el mismo worker
+        (`TrabajadorFuncion`, un QThread) que usa el boton "Ejecutar" de
+        Proyecciones, para que el hilo principal quede libre y el velo anime
+        con normalidad durante todo el calculo. `al_terminar(resultado, None)`
+        en exito, `al_terminar(None, mensaje)` en error; en ambos casos el
+        velo se cierra antes de invocar el callback.
+        """
         self.spin_anio.setValue(int(anio))
         self.spin_mes.setValue(int(mes))
-        # Se ejecuta en el hilo principal (llamada sincrona desde Empalme), asi
-        # que el velo de carga -misma infraestructura que usa Proyecciones- se
-        # muestra y se fuerza su repintado antes de bloquear, y se cierra tanto
-        # en exito como en error.
-        self._establecer_ocupado(True, "Ejecutando proyección para el empalme...")
-        QApplication.processEvents()
-        try:
-            resultado = self.controlador.ejecutar_analisis(seleccion, int(anio), int(mes), "manual")
+        self._establecer_ocupado(True, "Calculando proyección ICOCIV...")
+
+        trabajador = TrabajadorFuncion(self.controlador.ejecutar_analisis, seleccion, int(anio), int(mes), "manual")
+        self._trabajador_empalme = trabajador
+
+        def _en_exito(resultado: dict[str, Any]) -> None:
             self._proyeccion_lista(resultado, registrar=False)
-            return resultado
-        finally:
             self._establecer_ocupado(False)
+            al_terminar(resultado, None)
+
+        def _en_error(mensaje: str) -> None:
+            self._establecer_ocupado(False)
+            al_terminar(None, mensaje)
+
+        trabajador.resultado.connect(_en_exito)
+        trabajador.error.connect(_en_error)
+        trabajador.finished.connect(lambda: setattr(self, "_trabajador_empalme", None))
+        trabajador.start()
 
     def guardar_sesion_actual(self) -> None:
         if self.controlador.proyeccion_actual is None:

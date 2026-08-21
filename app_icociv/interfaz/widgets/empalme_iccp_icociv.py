@@ -135,14 +135,23 @@ class WidgetEmpalmeICCPICOCIV(QWidget):
         self.controlador_icociv = ControladorPrincipal()
         self.calculos: list[dict[str, Any]] = []
         self.indice_edicion: int | None = None
-        self.callback_proyeccion_icociv: Callable[[dict[str, Any], int, int], dict[str, Any]] | None = None
+        # Asincrono: (seleccion, anio, mes, al_terminar) -> None. `al_terminar`
+        # se invoca como (resultado, None) en exito o (None, mensaje) en error,
+        # una vez que el worker en segundo plano termina. Ver
+        # `ventana_principal._ejecutar_proyeccion_para_empalme_async`.
+        self.callback_proyeccion_icociv: (
+            Callable[[dict[str, Any], int, int, Callable[[dict[str, Any] | None, str | None], None]], None] | None
+        ) = None
         self.modelo_equivalencias = ModeloTablaPandas()
         self.modelo_valor_ajustado = ModeloTablaPandas()
         self._crear_interfaz()
         self._actualizar_controles_selector(False)
 
-    def configurar_proyeccion_icociv(self, callback: Callable[[dict[str, Any], int, int], dict[str, Any]]) -> None:
-        """Conecta el empalme con el flujo de proyección ICOCIV existente."""
+    def configurar_proyeccion_icociv(
+        self,
+        callback: Callable[[dict[str, Any], int, int, Callable[[dict[str, Any] | None, str | None], None]], None],
+    ) -> None:
+        """Conecta el empalme con el flujo de proyección ICOCIV existente (asíncrono)."""
         self.callback_proyeccion_icociv = callback
 
     def actualizar_icociv(self, tablas: dict[str, pd.DataFrame], periodos: list[str]) -> None:
@@ -411,11 +420,29 @@ class WidgetEmpalmeICCPICOCIV(QWidget):
         self.boton_calcular.setText("Calcular actualización")
 
     def calcular(self) -> None:
+        opcion = self._opcion_icociv_o_vacia()
+        fecha_final = self._periodo_final()
+
+        # Validacion de horizonte: PRIMERO, inmediatamente despues de conocer
+        # el ultimo periodo ICOCIV disponible y el periodo objetivo, antes de
+        # cualquier otra validacion del formulario (item, unidad, serie ICCP).
+        # Solo aplica cuando hay ICOCIV resuelto (indices no vacios); si no,
+        # no hay horizonte que juzgar y el empalme sigue su camino habitual
+        # (por ejemplo, un item que no usa ICOCIV en absoluto).
+        horizonte = self._horizonte_meses_icociv(opcion, fecha_final)
+        if horizonte is not None and horizonte > H_OPERATIVO_MAX:
+            ultimo_real = _ultimo_periodo(opcion["indices"])
+            QMessageBox.warning(
+                self,
+                "Horizonte de proyección fuera del alcance de SAVIP",
+                f"El periodo seleccionado requiere proyectar {horizonte} meses desde el último dato "
+                f"ICOCIV disponible ({_periodo_visible(ultimo_real)}). SAVIP admite un máximo operativo "
+                "de 24 meses. Seleccione una fecha final que no exceda ese límite.",
+            )
+            self.fecha_final_mes.setFocus()
+            return  # datos conservados; nada se ejecuta, nada se guarda.
+
         try:
-            try:
-                opcion = self._opcion_icociv_actual()
-            except ValueError:
-                opcion = {"ruta": "", "ruta_estructurada": [], "indices": {}, "seleccion": {}}
             unidad = self.unidad.currentData()
             entrada = {
                 "item": self.item.text().strip(),
@@ -425,7 +452,7 @@ class WidgetEmpalmeICCPICOCIV(QWidget):
                 "precio_base": self.precio_base.value(),
                 "anticipo_amortizado": self.anticipo.value(),
                 "fecha_inicial": self._periodo_inicial(),
-                "fecha_final": self._periodo_final(),
+                "fecha_final": fecha_final,
                 **self._serie_iccp_actual(),
                 "ruta_icociv": opcion["ruta"],
                 "observacion_tecnica": self.observacion_item.toPlainText().strip(),
@@ -438,8 +465,54 @@ class WidgetEmpalmeICCPICOCIV(QWidget):
                 raise ValueError("Debe ingresar el insumo contractual antes de calcular.")
             if not unidad:
                 raise ValueError("Seleccione una unidad válida.")
-            opcion = self._preparar_icociv_para_empalme(opcion, entrada["fecha_final"])
-            resultado = calcular_empalme_iccp_icociv(entrada, opcion["indices"])
+        except ValueError as exc:
+            QMessageBox.warning(self, "Validación empalme", str(exc))
+            return
+
+        if horizonte is not None and horizonte >= 1:
+            # Necesita proyectar ICOCIV: camino asincrono con el worker de
+            # Proyecciones (mismo motor, sin duplicarlo) para que el velo de
+            # carga se anime durante todo el calculo en vez de congelarse.
+            if self.callback_proyeccion_icociv is None:
+                QMessageBox.warning(
+                    self,
+                    "Validación empalme",
+                    "La fecha final solicitada supera el último periodo disponible en el archivo "
+                    "ICOCIV, pero el módulo de proyección no está conectado.",
+                )
+                return
+            self.boton_calcular.setEnabled(False)
+            anio, mes = _periodo_partes(normalizar_periodo_empalme(fecha_final))
+
+            def _continuar(resultado_ui: dict[str, Any] | None, mensaje_error: str | None) -> None:
+                self.boton_calcular.setEnabled(True)
+                if mensaje_error is not None:
+                    QMessageBox.warning(
+                        self, "Validación empalme",
+                        f"No fue posible calcular la proyección ICOCIV.\n{mensaje_error}",
+                    )
+                    return
+                try:
+                    opcion_final = self._aplicar_resultado_proyeccion(opcion, resultado_ui or {}, fecha_final)
+                except ValueError as exc:
+                    QMessageBox.warning(self, "Validación empalme", str(exc))
+                    return
+                self._finalizar_calculo(entrada, opcion_final)
+
+            self.callback_proyeccion_icociv(opcion["seleccion"], anio, mes, _continuar)
+            return
+
+        # h<=0 (el dato ya es real) o sin ICOCIV resuelto: camino sincrono,
+        # sin popup de carga (no hay nada que proyectar).
+        opcion_final = {
+            **opcion,
+            "metadata_proyeccion": opcion.get("metadata_proyeccion") or {"icociv_final_es_proyectado": False},
+        }
+        self._finalizar_calculo(entrada, opcion_final)
+
+    def _finalizar_calculo(self, entrada: dict[str, Any], opcion: dict[str, Any]) -> None:
+        try:
+            resultado = calcular_empalme_iccp_icociv(entrada, opcion.get("indices") or {})
         except ValueError as exc:
             QMessageBox.warning(self, "Validación empalme", str(exc))
             return
@@ -794,43 +867,34 @@ class WidgetEmpalmeICCPICOCIV(QWidget):
             "seleccion": seleccion,
         }
 
-    def _preparar_icociv_para_empalme(self, opcion: dict[str, Any], fecha_final: Any) -> dict[str, Any]:
-        indices = dict(opcion.get("indices") or {})
-        if not indices:
-            return opcion
+    def _opcion_icociv_o_vacia(self) -> dict[str, Any]:
+        """Como `_opcion_icociv_actual`, pero sin lanzar: un item que no usa
+        ICOCIV (o que aún no tiene ruta seleccionada) es un caso válido."""
+        try:
+            return self._opcion_icociv_actual()
+        except ValueError:
+            return {"ruta": "", "ruta_estructurada": [], "indices": {}, "seleccion": {}}
 
+    def _horizonte_meses_icociv(self, opcion: dict[str, Any], fecha_final: Any) -> int | None:
+        """Meses entre el último periodo ICOCIV real disponible en `opcion` y
+        `fecha_final` (misma semántica que el módulo Proyecciones). `None` si
+        no hay ICOCIV resuelto (nada que juzgar); puede ser <= 0 si la fecha
+        ya está cubierta por datos reales."""
+        indices = opcion.get("indices") or {}
+        if not indices:
+            return None
         periodo_final = normalizar_periodo_empalme(fecha_final)
         ultimo_real = _ultimo_periodo(indices)
-        if _periodo_orden(periodo_final) <= _periodo_orden(ultimo_real):
-            return {**opcion, "indices": indices, "metadata_proyeccion": {"icociv_final_es_proyectado": False}}
+        return _periodo_orden(periodo_final) - _periodo_orden(ultimo_real)
 
-        if self.callback_proyeccion_icociv is None:
-            raise ValueError(
-                "La fecha final solicitada supera el último periodo disponible en el archivo ICOCIV, "
-                "pero el módulo de proyección no está conectado."
-            )
-
-        # Misma semantica de horizonte que el modulo Proyecciones: meses entre
-        # el ultimo periodo real y la fecha objetivo, acotados a H_OPERATIVO_MAX.
-        # No se ejecuta ninguna proyeccion si se excede: se avisa y se conservan
-        # los datos ya ingresados en el formulario (el ValueError no los toca).
-        horizonte_meses = _periodo_orden(periodo_final) - _periodo_orden(ultimo_real)
-        if horizonte_meses > H_OPERATIVO_MAX:
-            raise ValueError(
-                f"La fecha final solicitada requiere proyectar {horizonte_meses} meses más allá del "
-                f"último periodo ICOCIV disponible ({_periodo_visible(ultimo_real)}). "
-                f"SAVIP admite un horizonte operativo máximo de {H_OPERATIVO_MAX} meses. "
-                "Ajuste la fecha final o cargue un anexo ICOCIV más reciente."
-            )
-
-        QMessageBox.information(
-            self,
-            "Proyección ICOCIV requerida",
-            "La fecha final solicitada supera el último periodo disponible en el archivo ICOCIV. "
-            "Se usará el módulo de proyección existente para estimar el índice ICOCIV final.",
-        )
-        anio, mes = _periodo_partes(periodo_final)
-        resultado_ui = self.callback_proyeccion_icociv(opcion["seleccion"], anio, mes)
+    def _aplicar_resultado_proyeccion(
+        self, opcion: dict[str, Any], resultado_ui: dict[str, Any], fecha_final: Any
+    ) -> dict[str, Any]:
+        """Incorpora el resultado ya calculado (fuera del hilo principal) del
+        callback de proyección a los índices ICOCIV del empalme."""
+        indices = dict(opcion.get("indices") or {})
+        periodo_final = normalizar_periodo_empalme(fecha_final)
+        ultimo_real = _ultimo_periodo(indices)
         proyeccion = resultado_ui.get("proyeccion", {})
         solicitado = proyeccion.get("resultado_horizonte_solicitado") or {}
         indice_final = solicitado.get("indice_proyectado")

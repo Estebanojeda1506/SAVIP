@@ -1,10 +1,12 @@
-"""Pruebas dirigidas del horizonte de proyección en Empalme (fix-ui-pre-v1).
+"""Pruebas dirigidas del horizonte de proyección en Empalme (fix-ui-pre-v1,
+prompt "corregir definitivamente validación >24 meses y carga").
 
-`_preparar_icociv_para_empalme` reutiliza la misma semántica de horizonte que
-el módulo Proyecciones (meses entre el último periodo real y la fecha
-objetivo, acotados a H_OPERATIVO_MAX=24): +24 meses se ejecuta con normalidad,
-+25 se rechaza sin ejecutar ninguna proyección, con un mensaje claro que cita
-el máximo operativo, y sin tocar los datos ya cargados en `opcion`.
+`calcular()` valida el horizonte (misma semántica que Proyecciones: meses
+entre el último periodo ICOCIV real y la fecha objetivo) como PRIMER paso,
+antes de construir `entrada` o llamar a cualquier otra validación del
+formulario. +24 meses se ejecuta (asíncrono, vía el callback de proyección);
++25 se rechaza con un popup modal específico, sin llamar nunca al callback ni
+tocar los datos ya ingresados.
 """
 from __future__ import annotations
 
@@ -33,16 +35,42 @@ def _aplicacion() -> QApplication:
     return _app
 
 
-def _widget() -> WidgetEmpalmeICCPICOCIV:
+def _widget_listo(fecha_final_anio: int, fecha_final_mes: int) -> WidgetEmpalmeICCPICOCIV:
+    """Widget con los campos mínimos para llegar a `calcular()` sin errores
+    de formulario que enmascaren la validación de horizonte."""
     _aplicacion()
-    return WidgetEmpalmeICCPICOCIV()
+    w = WidgetEmpalmeICCPICOCIV()
+    w.item.setText("Cemento")
+    w.unidad.setCurrentIndex(1)
+    w.cantidad.setValue(10)
+    w.precio_base.setValue(1000)
+    w.combo_tipo_iccp.setCurrentIndex(1)
+    w._actualizar_series_iccp()
+    w.combo_serie_iccp.setCurrentIndex(1)
+    w.fecha_inicial_anio.setValue(2021)
+    w.fecha_inicial_mes.setValue(1)
+    w.fecha_final_anio.setValue(fecha_final_anio)
+    w.fecha_final_mes.setValue(fecha_final_mes)
+    return w
 
 
-def _opcion(ultimo_periodo: str = "2026_1") -> dict:
-    # Serie mensual sintetica de 65 observaciones que termina en ultimo_periodo,
-    # suficiente para que el ultimo real sea ese periodo.
-    anio, mes = (int(p) for p in ultimo_periodo.split("_"))
-    indices = {ultimo_periodo: 140.2}
+def _opcion_falsa(ultimo_periodo: str = "2026_5") -> dict:
+    # calcular_empalme_iccp_icociv necesita el índice ICOCIV también en la
+    # fecha inicial (2021_1, fija en _widget_listo) además del último real;
+    # se cubre todo el rango mensual entre ambas para que el cálculo formal
+    # se complete y así aislar la validación de horizonte, que es lo que
+    # estas pruebas verifican.
+    anio_u, mes_u = (int(p) for p in ultimo_periodo.split("_"))
+    indices: dict[str, float] = {}
+    anio, mes = 2020, 12
+    valor = 100.0
+    while (anio, mes) <= (anio_u, mes_u):
+        indices[f"{anio}_{mes}"] = valor
+        valor += 0.5
+        mes += 1
+        if mes > 12:
+            mes = 1
+            anio += 1
     return {
         "ruta": "Vías urbanas",
         "ruta_estructurada": [],
@@ -51,104 +79,155 @@ def _opcion(ultimo_periodo: str = "2026_1") -> dict:
     }
 
 
-def test_sin_proyeccion_fecha_dentro_de_lo_observado() -> None:
-    """La fecha final ya está en la serie: no se llama al callback."""
-    widget = _widget()
-    llamadas: list[tuple] = []
-    widget.configurar_proyeccion_icociv(lambda *a: llamadas.append(a) or {"proyeccion": {}})
-    opcion = _opcion("2026_1")
-    resultado = widget._preparar_icociv_para_empalme(opcion, "2026_1")
+def test_h0_fecha_dentro_de_lo_observado_no_llama_proyeccion() -> None:
+    w = _widget_listo(2026, 5)
+    w._opcion_icociv_o_vacia = lambda: _opcion_falsa("2026_5")
+    llamadas = []
+    w.configurar_proyeccion_icociv(lambda *a: llamadas.append(a))
+    avisos = []
+    QMessageBox.warning = staticmethod(lambda *a, **k: avisos.append(a))
+    w.calcular()
+    assert not llamadas, "h=0 no debe llamar a la proyección"
+    assert not avisos, "h=0 no debe mostrar ninguna advertencia de horizonte"
+    assert len(w.calculos) == 1
+    assert w.calculos[0].get("icociv_final_es_proyectado") is False
+
+
+def test_h1_permite_y_llama_a_la_proyeccion_una_vez() -> None:
+    w = _widget_listo(2026, 6)  # +1 mes desde 2026_5
+    w._opcion_icociv_o_vacia = lambda: _opcion_falsa("2026_5")
+    llamadas = []
+
+    def callback(seleccion, anio, mes, al_terminar):
+        llamadas.append((anio, mes))
+        al_terminar(
+            {
+                "proyeccion": {
+                    "resultado_horizonte_solicitado": {
+                        "proyeccion_generada": True,
+                        "indice_proyectado": 141.0,
+                        "modelo_aplicado": "Drift",
+                        "horizonte_solicitado": 1,
+                        "estado": "proyeccion_tecnica",
+                        "periodo_proyectado": "2026_6",
+                        "razones_tecnicas": [],
+                    },
+                    "model_name": "Drift",
+                }
+            },
+            None,
+        )
+
+    w.configurar_proyeccion_icociv(callback)
+    QMessageBox.information = staticmethod(lambda *a, **k: None)
+    w.calcular()
+    assert llamadas == [(2026, 6)], "h=1 debe llamar exactamente una vez a la proyección"
+    assert len(w.calculos) == 1
+    assert w.calculos[0]["icociv_final_es_proyectado"] is True
+    assert w.boton_calcular.isEnabled(), "el botón debe reactivarse al terminar"
+
+
+def test_h24_permitido_y_llama_a_la_proyeccion_una_vez() -> None:
+    # 2026_5 + 24 meses = 2028_5.
+    w = _widget_listo(2028, 5)
+    w._opcion_icociv_o_vacia = lambda: _opcion_falsa("2026_5")
+    llamadas = []
+
+    def callback(seleccion, anio, mes, al_terminar):
+        llamadas.append((anio, mes))
+        al_terminar(
+            {
+                "proyeccion": {
+                    "resultado_horizonte_solicitado": {
+                        "proyeccion_generada": True,
+                        "indice_proyectado": 160.0,
+                        "modelo_aplicado": "Huber (robusta)",
+                        "horizonte_solicitado": H_OPERATIVO_MAX,
+                        "estado": "proyeccion_tecnica",
+                        "periodo_proyectado": "2028_5",
+                        "razones_tecnicas": [],
+                    },
+                    "model_name": "Huber (robusta)",
+                }
+            },
+            None,
+        )
+
+    w.configurar_proyeccion_icociv(callback)
+    QMessageBox.information = staticmethod(lambda *a, **k: None)
+    w.calcular()
+    assert llamadas == [(2028, 5)]
+    assert len(w.calculos) == 1
+    assert w.calculos[0]["icociv_final_es_proyectado"] is True
+
+
+def test_h25_rechazado_sin_llamar_a_la_proyeccion() -> None:
+    # 2026_5 + 25 meses = 2028_6.
+    w = _widget_listo(2028, 6)
+    w._opcion_icociv_o_vacia = lambda: _opcion_falsa("2026_5")
+    llamadas = []
+    w.configurar_proyeccion_icociv(lambda *a: llamadas.append(a))
+    avisos = []
+    QMessageBox.warning = staticmethod(lambda *a, **k: avisos.append(a))
+    w.calcular()
+    assert not llamadas, "h=25 NO debe llamar nunca a la función de proyección"
+    assert len(avisos) == 1
+    titulo, mensaje = avisos[0][-2], avisos[0][-1]
+    assert titulo == "Horizonte de proyección fuera del alcance de SAVIP"
+    assert "25" in mensaje and str(H_OPERATIVO_MAX) in mensaje
+    assert not w.calculos, "no debe guardarse ningún cálculo"
+    # Los datos ingresados se conservan (nada los tocó).
+    assert w.item.text() == "Cemento"
+    assert w.fecha_final_anio.value() == 2028 and w.fecha_final_mes.value() == 6
+
+
+def test_fecha_muy_futura_2036_rechazada_dinamicamente() -> None:
+    """La prueba deriva h dinámicamente a partir del último real, sin
+    hardcodear que 2036-08 sea >24 meses de nada fijo."""
+    w = _widget_listo(2036, 8)
+    ultimo = "2026_5"
+    w._opcion_icociv_o_vacia = lambda: _opcion_falsa(ultimo)
+    h_esperado = w._horizonte_meses_icociv(_opcion_falsa(ultimo), "2036_8")
+    assert h_esperado > H_OPERATIVO_MAX, "la fecha de prueba debe exceder el máximo operativo"
+
+    llamadas = []
+    w.configurar_proyeccion_icociv(lambda *a: llamadas.append(a))
+    avisos = []
+    QMessageBox.warning = staticmethod(lambda *a, **k: avisos.append(a))
+    w.calcular()
     assert not llamadas
-    assert resultado["metadata_proyeccion"]["icociv_final_es_proyectado"] is False
+    assert len(avisos) == 1
+    assert str(h_esperado) in avisos[0][-1]
 
 
-def test_mas_1_mes_ejecuta_normalmente() -> None:
-    widget = _widget()
-    llamadas: list[tuple] = []
+def test_boton_se_reactiva_si_la_proyeccion_falla() -> None:
+    w = _widget_listo(2026, 6)
+    w._opcion_icociv_o_vacia = lambda: _opcion_falsa("2026_5")
 
-    def callback(seleccion, anio, mes):
-        llamadas.append((anio, mes))
-        return {
-            "proyeccion": {
-                "resultado_horizonte_solicitado": {
-                    "proyeccion_generada": True,
-                    "indice_proyectado": 141.0,
-                    "modelo_aplicado": "Drift",
-                    "horizonte_solicitado": 1,
-                    "estado": "proyeccion_tecnica",
-                    "periodo_proyectado": "2026_2",
-                    "razones_tecnicas": [],
-                },
-                "model_name": "Drift",
-            }
-        }
+    def callback(seleccion, anio, mes, al_terminar):
+        al_terminar(None, "fallo simulado del motor de proyección")
 
-    widget.configurar_proyeccion_icociv(callback)
-    QMessageBox.information = staticmethod(lambda *a, **k: None)
-    opcion = _opcion("2026_1")
-    resultado = widget._preparar_icociv_para_empalme(opcion, "2026_2")
-    assert llamadas == [(2026, 2)]
-    assert resultado["metadata_proyeccion"]["icociv_final_es_proyectado"] is True
-    assert resultado["indices"]["2026_2"] == 141.0
+    w.configurar_proyeccion_icociv(callback)
+    avisos = []
+    QMessageBox.warning = staticmethod(lambda *a, **k: avisos.append(a))
+    w.calcular()
+    assert w.boton_calcular.isEnabled(), "el botón debe reactivarse aunque la proyección falle"
+    assert not w.calculos
+    assert avisos, "debe avisarse del fallo"
 
 
-def test_mas_24_meses_permitido() -> None:
-    widget = _widget()
-    llamadas: list[tuple] = []
+def test_boton_se_deshabilita_mientras_la_proyeccion_esta_en_curso() -> None:
+    w = _widget_listo(2026, 6)
+    w._opcion_icociv_o_vacia = lambda: _opcion_falsa("2026_5")
+    estado_boton_durante: list[bool] = []
 
-    def callback(seleccion, anio, mes):
-        llamadas.append((anio, mes))
-        return {
-            "proyeccion": {
-                "resultado_horizonte_solicitado": {
-                    "proyeccion_generada": True,
-                    "indice_proyectado": 160.0,
-                    "modelo_aplicado": "Huber (robusta)",
-                    "horizonte_solicitado": H_OPERATIVO_MAX,
-                    "estado": "proyeccion_tecnica",
-                    "periodo_proyectado": "2028_1",
-                    "razones_tecnicas": [],
-                },
-                "model_name": "Huber (robusta)",
-            }
-        }
+    def callback(seleccion, anio, mes, al_terminar):
+        estado_boton_durante.append(w.boton_calcular.isEnabled())
+        # no se llama a al_terminar: simula que sigue en curso.
 
-    widget.configurar_proyeccion_icociv(callback)
-    QMessageBox.information = staticmethod(lambda *a, **k: None)
-    opcion = _opcion("2026_1")
-    # 2026_1 + 24 meses = 2028_1.
-    resultado = widget._preparar_icociv_para_empalme(opcion, "2028_1")
-    assert llamadas, "+24 meses debe ejecutar la proyección"
-    assert resultado["metadata_proyeccion"]["icociv_final_es_proyectado"] is True
-
-
-def test_mas_25_meses_rechazado_sin_ejecutar() -> None:
-    widget = _widget()
-    llamadas: list[tuple] = []
-    widget.configurar_proyeccion_icociv(lambda *a: llamadas.append(a) or {})
-    opcion = _opcion("2026_1")
-    opcion_original = dict(opcion)
-    try:
-        # 2026_1 + 25 meses = 2028_2.
-        widget._preparar_icociv_para_empalme(opcion, "2028_2")
-        assert False, "debe rechazar +25 meses con ValueError"
-    except ValueError as exc:
-        mensaje = str(exc)
-        assert str(H_OPERATIVO_MAX) in mensaje
-        assert "máximo operativo" in mensaje or "horizonte operativo máximo" in mensaje
-    assert not llamadas, "no debe ejecutarse ninguna proyección si excede el máximo operativo"
-    # Los datos de entrada no se tocan: la excepción se lanza antes de mutar nada.
-    assert opcion == opcion_original
-
-
-def test_sin_callback_conectado_no_ejecuta_y_avisa() -> None:
-    widget = _widget()
-    opcion = _opcion("2026_1")
-    try:
-        widget._preparar_icociv_para_empalme(opcion, "2026_2")
-        assert False, "sin callback debe rechazarse"
-    except ValueError:
-        pass
+    w.configurar_proyeccion_icociv(callback)
+    w.calcular()
+    assert estado_boton_durante == [False], "debe estar deshabilitado durante el cálculo"
 
 
 def _principal() -> int:
